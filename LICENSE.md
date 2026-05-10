@@ -2,12 +2,11 @@
 
 Copyright (c) 2026, Khairi <khairi@labs.my>
 
-This gem is an independent third-party Ruby client for [NodeDB](https://nodedb.dev).
-It is not affiliated with, endorsed by, or maintained by the NodeDB project or
-its contributors.
+Released under the **BSD 2-Clause License**.
 
-Released under the **BSD 2-Clause License** (same style as
-[ruby-pg](https://github.com/ged/ruby-pg/blob/master/LICENSE)).
+This gem is an independent third-party Ruby client for [NodeDB](https://nodedb.dev).
+It is not affiliated with, endorsed by, or maintained by the NodeDB project
+or its contributors.
 
 ## BSD 2-Clause License
 
@@ -36,11 +35,5 @@ POSSIBILITY OF SUCH DAMAGE.
 ## Trademarks
 
 "NodeDB" and the NodeDB logo are property of the NodeDB project. This gem
-uses the name solely to identify the database it connects to. No
-endorsement is implied.
-
-## Notes on linked / referenced code
-
-Portions of the type map and pgwire interaction patterns mirror behavior of
-[ruby-pg](https://github.com/ged/ruby-pg) (BSD-2-Clause). No source from
-ruby-pg is vendored.
+uses the name solely to identify the database it connects to. No endorsement
+is implied.
