@@ -4,6 +4,9 @@ require_relative "nodedb/column"
 require_relative "nodedb/database_statements"
 require_relative "nodedb/schema_statements"
 require_relative "nodedb/schema_creation"
+require_relative "nodedb/type/vector"
+require_relative "nodedb/type/geometry"
+require_relative "nodedb/type/json"
 require_relative "nodedb/vector"
 require_relative "nodedb/graph"
 require_relative "nodedb/timeseries"
@@ -126,6 +129,21 @@ module ActiveRecord
       # fall back gracefully for schema introspection.
       def schema_creation
         Nodedb::SchemaCreation.new(self)
+      end
+
+      # Register NodeDB-specific Ruby type casters at connection bootstrap.
+      # Pattern lifted from activerecord-postgis-adapter / clickhouse-activerecord:
+      # extend the AR type registry so #cast / #serialize / #deserialize behave
+      # for engine-specific columns (vector, geometry, json, uuid).
+      #
+      # NodeDB pgwire mostly returns strings; these casters convert them into
+      # idiomatic Ruby on read and serialise Ruby into NodeDB literals on write.
+      def initialize_type_map(m = type_map)
+        super
+        m.register_type "vector"   do |sql_type| Nodedb::Type::Vector.new(sql_type: sql_type) end
+        m.register_type "geometry" do |sql_type| Nodedb::Type::Geometry.new(sql_type: sql_type) end
+        m.register_type "json"     do            Nodedb::Type::Json.new                end
+        m.register_type "jsonb"    do            Nodedb::Type::Json.new                end
       end
 
       private
