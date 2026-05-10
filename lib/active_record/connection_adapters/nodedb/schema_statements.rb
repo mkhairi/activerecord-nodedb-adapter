@@ -13,13 +13,18 @@ module ActiveRecord
         #     t.vector :embedding, dim: 384
         #     t.timestamps
         #   end
-        def create_collection(collection_name, engine: nil, **options, &block)
-          td = create_table_definition(collection_name.to_s, **options.except(:engine_options))
+        def create_collection(collection_name, engine: nil, engine_options: {}, **options, &block)
+          td = create_table_definition(collection_name.to_s, **options)
           td.instance_variable_set(:@engine, engine)
           block.call(td) if block
 
           col_strings = td.columns.map { |c| schema_creation.accept(c) }
-          sql = NodeDB::SQL::Collection.create(collection_name.to_s, engine: engine, columns: col_strings)
+          sql = NodeDB::SQL::Collection.create(
+            collection_name.to_s,
+            engine:         engine,
+            columns:        col_strings,
+            engine_options: engine_options
+          )
           execute_nodedb(sql)
         end
 
