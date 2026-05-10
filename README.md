@@ -318,33 +318,90 @@ end
 
 ## Known issues
 
-NodeDB-side parser quirks the adapter has to dance around. Each is tracked in
-`docs/bugs/`.
+NodeDB-side parser quirks and limits, grouped by status. Each is tracked
+in `docs/bugs/`.
 
-- **`SELECT *` on document collections returns wrapped JSON.** Workaround:
-  `default_scope { select("id, …") }` with unqualified column names. Adapter
-  fix tracked above.
-- **NodeDB rejects qualified column refs.** `articles.id` and
-  `"articles"."id"` resolve to nil. Use unqualified names in projections.
-  AR's `WHERE "articles"."id" = '…'` does work for `find` because it goes
-  through a code path NodeDB does parse; only projections break.
-- **`SEARCH … USING VECTOR()` rejects quoted identifiers.** The
-  `NodeDB::Vector#search_vector` concern always emits bare names.
+### Resolved upstream
+
+- **BUG-001** `ResourcesExhausted` on non-timeseries INSERT — fixed in
+  `nodedb/src/config/engine.rs` + `memory/startup.rs`.
+- **BUG-005** Prepared statements missing `RowDescription` — fixed
+  upstream; adapter still uses simple-query mode for safety.
+- **BUG-006** Boolean column OID 0 — fixed upstream; no `unknown OID`
+  warnings emitted.
+
+### Adapter compensates transparently
+
+You write idiomatic AR; the adapter swallows the workaround:
+
+- **`schema_migrations` / `ar_internal_metadata` tables (#24)** — NodeDB-aware
+  subclasses use `CREATE COLLECTION` + raw unqualified SQL. `rails
+  db:migrate` and `migration_error: :page_load` work normally.
+- **BUG-008** DELETE inside transaction silently dropped — `exec_delete`
+  override commits + re-issues the DELETE outside the AR-opened
+  transaction so `record.destroy` actually persists.
+- **BUG-010** `text_match()` predicate doesn't filter rows — `fts_search`
+  drops rows whose `bm25_score` is null.
+- **BUG-013** FTS fuzzy mode returns single `result` column wrapping JSON
+  — `fts_search` JSON-parses and unwraps.
+- **GRAPH TRAVERSE** returns a single row with a JSON array — `Graph`
+  concern parses automatically.
+- **GRAPH INSERT EDGE** now requires `IN 'collection'` — `Graph` concern
+  threads `in_collection:` automatically.
+- **BUG-007** `pg_attribute` query returns duplicate `id` row — adapter
+  uses `DESCRIBE` fallback in `column_definitions`.
+- **libpq stderr noise** on `INSERT EDGE`, `GRAPH …` command tags —
+  `Graph.silence_libpq_noise` block filter.
+- **`SEARCH … USING VECTOR()` rejects quoted identifiers** — `Vector`
+  concern emits bare column names.
+
+### Requires user awareness
+
+These leak through to model code; the workaround is a one-line model
+declaration:
+
+- **NodeDB rejects qualified column refs** in projections. `articles.id`
+  and `"articles"."id"` return nil for select lists. Use a model
+  `default_scope { select("id, title, body") }` with unqualified column
+  names. AR's `WHERE "articles"."id" = '…'` for `find` *does* work — only
+  projections are affected.
+- **`SELECT *` on schemaless document collections** returns
+  `{"result" => "<json>"}` instead of flat columns. Either project
+  explicit columns (per above) or use the `document_strict` engine.
 - **`SEARCH` cannot be wrapped in subqueries.** `IN (SEARCH …)`,
-  `FROM (SEARCH …)`, and `WHERE id IN (SELECT id FROM (SEARCH …))` all fail
-  to parse. The vector concern returns surrogate + distance and lets you
-  follow up with a `find`.
-- **GRAPH TRAVERSE returns a single row whose `result` column is a JSON
-  array of node IDs.** The Graph concern parses that automatically.
-- **GRAPH INSERT EDGE now requires `IN 'collection'`.** Builder updated; if
-  you call the SQL builder directly you must pass `in_collection:`.
-- **`schema_migrations` table.** Resolved — adapter ships NodeDB-aware
-  `SchemaMigration` / `InternalMetadata` subclasses; `migration_error:
-  :page_load` and `rails db:migrate` work against
-  `CREATE COLLECTION ... WITH (engine='document_strict')` collections.
-- **BUG-001 (`ResourcesExhausted` on non-timeseries INSERT).** Fixed
-  upstream in `nodedb/src/config/engine.rs` + `memory/startup.rs`. See
-  `docs/bugs/001-*.md`.
+  `FROM (SEARCH …)`, and `SELECT id FROM (SEARCH …)` all fail to parse.
+  The Vector concern returns surrogate + distance and lets you do a
+  follow-up `find`.
+- **`document_strict` requires the user-facing PK to live in the
+  built-in `id` column.** Declaring a custom `version TEXT PRIMARY KEY`
+  triggers a duplicate-empty-id collision on the second INSERT. Sample
+  workaround: store the lookup key in `id` directly.
+
+### Open / limited workaround
+
+- **BUG-002** `SELECT version()` returns empty — adapter uses
+  `SHOW server_version` instead.
+- **BUG-003** `PQserverVersion()` raises `PG::ConnectionBad` — adapter
+  hardcodes `160000` for `database_version` / `get_database_version`.
+- **BUG-004** `DROP COLLECTION IF EXISTS` parses `IF` as a collection
+  name when target is present — `drop_collection(if_exists:)` rescues
+  the not-found error instead.
+- **BUG-009** `INSERT` command tag missing OID slot — produces stderr
+  noise on every successful INSERT. Tracked; covered case-by-case via
+  `silence_libpq_noise`.
+- **BUG-011** Spatial INSERT does not evaluate `ST_GeomFromText` —
+  values stored as literal SQL text. Sample app uses `document_strict`
+  engine with explicit `lat FLOAT, lon FLOAT` columns and computes
+  haversine in Ruby.
+- **BUG-012** Spatial engine drops non-geometry typed columns silently
+  on INSERT. Combined with BUG-011, no working storage path exists in
+  the spatial engine today.
+- **DROP+CREATE preserves rows within retention window.** NodeDB
+  soft-deletes the storage; a fresh `CREATE COLLECTION` of the same name
+  resurrects the old rows. Use `UNDROP COLLECTION name` then
+  `DELETE FROM name` to clear, or wait for the retention window to
+  expire. `bin/setup` in the sample app reconciles this for
+  `schema_migrations` automatically.
 
 ## License
 
