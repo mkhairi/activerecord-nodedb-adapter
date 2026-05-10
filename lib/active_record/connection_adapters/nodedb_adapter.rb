@@ -4,6 +4,7 @@ require_relative "nodedb/column"
 require_relative "nodedb/database_statements"
 require_relative "nodedb/schema_statements"
 require_relative "nodedb/schema_creation"
+require_relative "nodedb/schema_dumper"
 require_relative "nodedb/schema_migration"
 require_relative "nodedb/internal_metadata"
 require_relative "nodedb/connection_pool_patch"
@@ -134,6 +135,13 @@ module ActiveRecord
       # fall back gracefully for schema introspection.
       def schema_creation
         Nodedb::SchemaCreation.new(self)
+      end
+
+      # Dump db/schema.rb using the NodeDB-aware dumper that emits engine
+      # helpers (create_document_strict, create_timeseries, …) instead of
+      # AR's standard create_table.
+      def create_schema_dumper(options)
+        Nodedb::SchemaDumper.new(self, options)
       end
 
       # Register NodeDB-specific Ruby type casters at connection bootstrap.
