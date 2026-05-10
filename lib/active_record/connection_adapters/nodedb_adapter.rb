@@ -99,6 +99,23 @@ module ActiveRecord
         false
       end
 
+      # AR wraps `db:migrate` in a session-scoped advisory lock to block
+      # concurrent migrations. PostgreSQL implements this via
+      # `pg_try_advisory_lock(N)` / `pg_advisory_unlock(N)`; NodeDB doesn't
+      # ship those functions yet, so AR raises ConcurrentMigrationError on
+      # every db:migrate.
+      #
+      # Stub both methods to a no-op pair (always succeeds). This loses
+      # cross-process migration safety — fine for single-instance alpha
+      # work; will be removed when NodeDB ships advisory-lock primitives.
+      def get_advisory_lock(lock_id)
+        true
+      end
+
+      def release_advisory_lock(lock_id)
+        true
+      end
+
       # NodeDB BUG-008: DELETE inside BEGIN;...COMMIT; is silently dropped on
       # commit. UPDATE/INSERT in the same transaction work fine.
       #

@@ -54,9 +54,19 @@ module ActiveRecord
         end
 
         def delete_version(version)
+          # AR's Migrator goes through `version.to_i.to_s` before calling
+          # us, which strips leading zeros from filename-style versions
+          # ("006" -> "6"). Match both literal and zero-padded forms so
+          # rollbacks work regardless of how the value was inserted.
           @pool.with_connection do |connection|
+            literal = connection.quote(version.to_s)
+            integer = connection.quote(version.to_i.to_s)
+            clauses = ["id = #{literal}", "id = #{integer}"]
+            if version.to_s.match?(/\A\d+\z/)
+              clauses << "id = #{connection.quote(format('%03d', version.to_i))}"
+            end
             connection.execute(
-              "DELETE FROM #{table_name} WHERE id = #{connection.quote(version.to_s)}"
+              "DELETE FROM #{table_name} WHERE #{clauses.uniq.join(' OR ')}"
             )
           end
         end
