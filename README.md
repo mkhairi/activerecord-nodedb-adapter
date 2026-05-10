@@ -145,6 +145,8 @@ Post.fts_search("nural networks", fuzzy: true)
 
 ## Migrations
 
+### Generic helper
+
 ```ruby
 create_collection :articles                        # document (schemaless)
 create_collection :metrics,  engine: :timeseries
@@ -153,10 +155,37 @@ create_collection :places,   engine: :spatial
 
 create_vector_index :idx_emb, on: :articles,
   column: :embedding, metric: :cosine, dim: 384
+drop_vector_index   :idx_emb
 ```
 
-For typed CRUD-style models, prefer the strict-schema engine (otherwise unknown
-columns are silently dropped):
+### Per-engine shorthands
+
+```ruby
+create_timeseries      :metrics
+create_kv              :sessions
+create_columnar        :events
+create_spatial         :locations
+create_document_strict :articles do |t|
+  # block-form columns work for any engine
+end
+```
+
+### Engine-specific WITH options
+
+Pass `engine_options:` to thread arbitrary settings into the `WITH (...)`
+clause:
+
+```ruby
+create_collection :metrics, engine: :timeseries,
+  engine_options: { retention: "7d", compression: "zstd" }
+# CREATE COLLECTION metrics (...)
+# WITH (engine='timeseries', retention='7d', compression='zstd')
+```
+
+### Strict-schema collections
+
+For typed CRUD-style models, prefer the strict-schema engine (otherwise
+unknown columns are silently dropped):
 
 ```ruby
 execute <<~SQL
@@ -166,6 +195,49 @@ execute <<~SQL
     body  TEXT
   ) WITH (engine='document_strict')
 SQL
+```
+
+A custom block-form `t.text` / `t.vector` / `t.geometry` DSL is on the
+roadmap; for now use raw `execute` for typed columns.
+
+## Type casters
+
+Engine-specific Ruby <-> NodeDB-literal casting is registered automatically
+on connection bootstrap. Declare attributes on your model and AR rounds
+them through the right Ruby type:
+
+```ruby
+class Article < ApplicationRecord
+  attribute :embedding, :vector       # Array<Float>     <-> "[0.1, 0.2, ...]"
+  attribute :payload,   :json         # Hash / Array     <-> JSON string
+  attribute :geom,      :geometry     # WKT string passthrough (BUG-011 follow-up)
+end
+
+Article.new(embedding: [0.1, 0.2, 0.3], payload: { source: "demo" })
+```
+
+Plus the connection-level quoting hook accepts Ruby values directly in raw
+SQL:
+
+```ruby
+ActiveRecord::Base.connection.quote([0.1, 0.2, 0.3])
+# => "'[0.1, 0.2, 0.3]'"
+
+ActiveRecord::Base.connection.quote({ "k" => 1 })
+# => "'{\"k\":1}'"
+```
+
+## Per-call session settings
+
+`with_settings { … }` sets NodeDB session variables for the duration of the
+block, restoring them on exit. Useful for one-off tweaks (FTS fuzzy
+distance, vector probe depth, query memory budgets) without polluting the
+global connection state:
+
+```ruby
+ActiveRecord::Base.connection.with_settings(application_name: "import-job") do
+  Article.insert_all(big_batch)
+end
 ```
 
 ## Requirements
@@ -183,11 +255,19 @@ SQL
 - [x] `database_version` stub returning `160000` so AR's PG version guards pass
 - [x] `nodedb_version` introspection from `SHOW server_version`
 - [x] Migration DSL: `create_collection`, `create_vector_index`,
-      `drop_collection(if_exists:)`
+      `drop_collection(if_exists:)`, `drop_vector_index`
+- [x] Per-engine helpers: `create_timeseries`, `create_kv`, `create_columnar`,
+      `create_spatial`, `create_document_strict`
+- [x] `engine_options:` kwarg threads arbitrary settings into the WITH clause
 - [x] Custom `SchemaCreation` for engine-aware DDL serialization
-- [x] Column type registration (vector, geometry, json, uuid)
+- [x] Type casters: `attribute :col, :vector` / `:json` / `:geometry`
+- [x] Quoting hooks: `Array<Numeric>` → VECTOR literal, `Hash` → JSON literal
+- [x] `connection.with_settings { … }` block for scoped session vars
 - [x] Model concerns: `NodeDB::Vector`, `Graph`, `Timeseries`, `Spatial`, `KV`,
       `FullTextSearch`
+- [x] `record.destroy` workaround for NodeDB BUG-008 (DELETE-in-txn dropped)
+- [x] `Graph.silence_libpq_noise` filter for harmless libpq stderr warnings
+- [x] FTS row normalisation (filters non-matches, unwraps fuzzy-mode JSON)
 - [x] `drop_collection` rescues missing-collection errors when `if_exists: true`
 - [x] Sample Rails 8 app with full CRUD walkthrough (`../../sample_rails_app`)
 
