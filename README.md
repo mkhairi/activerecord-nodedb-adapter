@@ -311,9 +311,13 @@ end
       `create_spatial`, `create_document_strict`
 - [x] `engine_options:` kwarg threads arbitrary settings into the WITH clause
 - [x] Custom `SchemaCreation` for engine-aware DDL serialization
-- [x] NodeDB-aware `SchemaMigration` + `InternalMetadata` so `rails db:migrate`
-      and `migration_error: :page_load` work against `schema_migrations` /
+- [x] NodeDB-aware `SchemaMigration` + `InternalMetadata` so `rails db:migrate`,
+      `db:rollback`, `db:migrate:status`, `db:seed`, and the dev-mode
+      `migration_error: :page_load` check all work against `schema_migrations` /
       `ar_internal_metadata` collections
+- [x] Advisory-lock stubs (`get_advisory_lock` / `release_advisory_lock`) so
+      AR's concurrent-migration guard doesn't trip — pair returns `true`
+- [x] `Nodedb::SchemaDumper` emits engine-aware DDL into `db/schema.rb`
 - [x] Type casters: `attribute :col, :vector` / `:json` / `:geometry`
 - [x] Quoting hooks: `Array<Numeric>` → VECTOR literal, `Hash` → JSON literal
 - [x] `connection.with_settings { … }` block for scoped session vars
@@ -332,7 +336,6 @@ end
       projection (`SELECT "articles".*`) returns flat columns
 - [ ] Silence harmless `INSERT EDGE` `pg`-gem stderr warnings
 - [ ] Generators (`rails g nodedb:collection`, `nodedb:vector_index`)
-- [ ] `db:seed` / `db:migrate:status` integration
 - [ ] Connection pool aware fixtures helper for RSpec
 - [ ] CHANGELOG.md
 - [ ] gemspec push to RubyGems (currently consumed via `path:`)
