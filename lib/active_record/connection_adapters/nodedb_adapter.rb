@@ -90,6 +90,38 @@ module ActiveRecord
         false
       end
 
+      # NodeDB BUG-008: DELETE inside BEGIN;...COMMIT; is silently dropped on
+      # commit. UPDATE/INSERT in the same transaction work fine.
+      #
+      # AR wraps `record.destroy` in an implicit transaction (and Rails 8 uses
+      # lazy transactions, so BEGIN is materialized as part of the DELETE
+      # call), meaning every destroy() silently no-ops.
+      #
+      # Workaround: after the AR-issued DELETE runs, if a transaction is still
+      # open, commit it, re-issue the same DELETE outside any transaction
+      # (which actually persists), then begin a fresh transaction so AR's
+      # surrounding COMMIT closes cleanly. NodeDB tolerates the extra
+      # BEGIN/COMMIT pair, and a second DELETE matching no rows is a no-op.
+      #
+      # Trade-off: any INSERT/UPDATE done before the DELETE in the same AR
+      # transaction is committed early instead of atomically with the DELETE.
+      # Acceptable for record.destroy (the only mutation in a single record's
+      # destroy lifecycle is the DELETE itself).
+      #
+      # Remove this override once NodeDB persists DELETE inside transactions.
+      def exec_delete(sql, name = nil, binds = [])
+        result = super
+        if transaction_open?
+          raw = @raw_connection
+          if raw
+            raw.send(:async_exec, "COMMIT")
+            raw.send(:async_exec, sql)
+            raw.send(:async_exec, "BEGIN")
+          end
+        end
+        result
+      end
+
       # NodeDB returns standard information_schema views over pgwire;
       # fall back gracefully for schema introspection.
       def schema_creation
