@@ -4,6 +4,7 @@ require_relative "nodedb/column"
 require_relative "nodedb/database_statements"
 require_relative "nodedb/schema_statements"
 require_relative "nodedb/schema_creation"
+require_relative "nodedb/session_settings"
 require_relative "nodedb/type/vector"
 require_relative "nodedb/type/geometry"
 require_relative "nodedb/type/json"
@@ -41,6 +42,7 @@ module ActiveRecord
 
       include Nodedb::DatabaseStatements
       include Nodedb::SchemaStatements
+      include Nodedb::SessionSettings
 
       # NodeDB version string reported by SELECT version()
       NODEDB_VERSION_RE = /NodeDB\s+([\d.]+)/i
