@@ -24,6 +24,15 @@ adds idiomatic Rails APIs (model concerns, migration DSL) for each NodeDB
 engine. Sits on top of [`nodedb-ruby`](../nodedb-ruby) for connection
 handling and SQL building.
 
+## Companion packages
+
+| Repo | Role |
+| ---- | ---- |
+| [`mkhairi/nodedb-ruby`](https://github.com/mkhairi/nodedb-ruby) | core — pgwire connection, type map, SQL builders |
+| [`mkhairi/activerecord-nodedb-adapter`](https://github.com/mkhairi/activerecord-nodedb-adapter) | **this gem** — Rails ActiveRecord adapter |
+| [`mkhairi/sequel-nodedb-adapter`](https://github.com/mkhairi/sequel-nodedb-adapter) | Sequel adapter (stub) |
+| [`mkhairi/nodedb-on-rails`](https://github.com/mkhairi/nodedb-on-rails) | Rails 8 sample app exercising every NodeDB engine |
+
 ## Status
 
 | Area              | State |
