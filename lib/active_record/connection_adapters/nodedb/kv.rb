@@ -14,17 +14,31 @@ module NodeDB
     extend ActiveSupport::Concern
 
     class_methods do
+      # NodeDB rejects qualified column refs (`"kv_sessions"."key"`), so the
+      # KV helpers build raw `WHERE key = …` predicates rather than using
+      # AR's hash-form `where(key: key)` which auto-qualifies.
       def kv_get(key)
-        find_by(key: key)&.value
+        rows = connection.select_all(
+          "SELECT key, value FROM #{table_name} WHERE key = #{connection.quote(key)} LIMIT 1"
+        )
+        rows.first&.fetch("value")
       end
 
       def kv_set(key, value, ttl: nil)
-        record = find_or_initialize_by(key: key)
-        record.value = value
-        record.save!
+        if kv_exists?(key)
+          connection.execute(
+            "UPDATE #{table_name} SET value = #{connection.quote(value)} " \
+            "WHERE key = #{connection.quote(key)}"
+          )
+        else
+          connection.execute(
+            "INSERT INTO #{table_name} (key, value) " \
+            "VALUES (#{connection.quote(key)}, #{connection.quote(value)})"
+          )
+        end
         if ttl
           sql = NodeDB::SQL::KV.set_ttl(
-            table: quoted_table_name,
+            table: table_name,
             key:   connection.quote(key),
             ttl:   ttl
           )
@@ -34,11 +48,16 @@ module NodeDB
       end
 
       def kv_delete(key)
-        where(key: key).delete_all
+        connection.execute(
+          "DELETE FROM #{table_name} WHERE key = #{connection.quote(key)}"
+        )
       end
 
       def kv_exists?(key)
-        where(key: key).exists?
+        rows = connection.select_all(
+          "SELECT key FROM #{table_name} WHERE key = #{connection.quote(key)} LIMIT 1"
+        )
+        rows.any?
       end
     end
   end
