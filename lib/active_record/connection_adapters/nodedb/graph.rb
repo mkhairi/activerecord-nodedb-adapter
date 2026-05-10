@@ -12,6 +12,12 @@ module NodeDB
   module Graph
     extend ActiveSupport::Concern
 
+    # libpq prints "could not interpret result from server: <TAG>" to fd 2
+    # whenever NodeDB returns a non-standard command tag (INSERT EDGE,
+    # GRAPH TRAVERSE, etc.). The query itself succeeds. Filter these specific
+    # lines without dropping any real warnings.
+    LIBPQ_NOISE_RE = /\Acould not interpret result from server: (INSERT EDGE|GRAPH [A-Z ]+)/
+
     class_methods do
       def graph_insert_edge(from:, to:, type:, properties: {})
         sql = NodeDB::SQL::Graph.insert_edge(
@@ -21,7 +27,7 @@ module NodeDB
           type:            connection.quote(type),
           properties_json: connection.quote(properties.to_json)
         )
-        connection.execute(sql)
+        NodeDB::Graph.silence_libpq_noise { connection.execute(sql) }
       end
 
       # Returns an Array of node ID strings.
@@ -32,13 +38,13 @@ module NodeDB
           depth:     depth,
           direction: direction
         )
-        raw = connection.select_all(sql)
+        raw = NodeDB::Graph.silence_libpq_noise { connection.select_all(sql) }
         JSON.parse(raw.first&.fetch("result", "[]") || "[]")
       end
 
       def graph_algo(algo, **options)
         sql = NodeDB::SQL::Graph.algo(table: quoted_table_name, algo: algo, **options)
-        connection.select_all(sql)
+        NodeDB::Graph.silence_libpq_noise { connection.select_all(sql) }
       end
 
       def graph_delete_edge(from:, to:, type:)
@@ -47,7 +53,27 @@ module NodeDB
           to:   connection.quote(to),
           type: connection.quote(type)
         )
-        connection.execute(sql)
+        NodeDB::Graph.silence_libpq_noise { connection.execute(sql) }
+      end
+    end
+
+    # Redirect fd 2 to a pipe, run the block, then re-emit any captured
+    # lines that don't match LIBPQ_NOISE_RE. Real warnings still surface.
+    def self.silence_libpq_noise
+      r, w = IO.pipe
+      original = STDERR.dup
+      STDERR.reopen(w)
+      w.close
+      begin
+        yield
+      ensure
+        STDERR.reopen(original)
+        original.close
+        captured = r.read
+        r.close
+        captured.each_line do |line|
+          $stderr.write(line) unless line =~ LIBPQ_NOISE_RE
+        end
       end
     end
   end
