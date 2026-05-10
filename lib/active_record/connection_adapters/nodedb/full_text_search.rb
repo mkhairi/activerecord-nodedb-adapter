@@ -40,13 +40,28 @@ module NodeDB
               "LIMIT #{limit.to_i}"
 
         rows = connection.select_all(sql).to_a
-        rows.filter_map do |row|
+        # NodeDB returns flat columns for plain text_match, but a JSON-wrapped
+        # `result` column when fuzzy mode is enabled (BUG-013). Normalise.
+        normalised = rows.map { |row| unwrap_fts_row(row) }
+        # Keep rows whose bm25_score is non-null. A score of 0.0 still means
+        # "matched but no IDF differential" (common in tiny corpora) and must
+        # not be dropped.
+        normalised.filter_map do |row|
           score_raw = row["bm25_score"]
-          next if score_raw.nil? || score_raw.to_s.empty?
-          score = score_raw.to_f
-          next if score.zero?
-          { "id" => row["id"], "score" => score }
+          next if score_raw.nil? || score_raw.to_s.strip.empty?
+          { "id" => row["id"], "score" => score_raw.to_f }
         end
+      end
+
+      private
+
+      def unwrap_fts_row(row)
+        return row unless row.is_a?(Hash) && row.size == 1 && row.key?("result")
+        parsed = JSON.parse(row["result"])
+        data = parsed["data"] || parsed
+        data
+      rescue JSON::ParserError
+        row
       end
     end
   end
