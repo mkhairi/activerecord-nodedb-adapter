@@ -148,6 +148,27 @@ module ActiveRecord
         m.register_type "jsonb"    do            Nodedb::Type::Json.new                end
       end
 
+      # Quote NodeDB-friendly literals for engine-specific Ruby values.
+      # Pattern lifted from activerecord-postgis-adapter / clickhouse-activerecord:
+      # short-circuit AR's quote() for types pgwire can't auto-quote.
+      #
+      #   quote([0.1, 0.2, 0.3])     # => "'[0.1, 0.2, 0.3]'"   (vector literal)
+      #   quote({ "k" => 1 })        # => "'{\"k\":1}'"         (JSON literal)
+      def quote(value)
+        case value
+        when Array
+          if value.all? { |v| v.is_a?(Numeric) }
+            "'[" + value.map(&:to_s).join(", ") + "]'"
+          else
+            super
+          end
+        when Hash
+          "'" + value.to_json.gsub("'", "''") + "'"
+        else
+          super
+        end
+      end
+
       private
 
       def column_class
