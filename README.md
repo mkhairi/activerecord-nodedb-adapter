@@ -207,7 +207,7 @@ SQL
 ## Known issues
 
 NodeDB-side parser quirks the adapter has to dance around. Each is tracked in
-`../bugs/`.
+`docs/bugs/`.
 
 - **`SELECT *` on document collections returns wrapped JSON.** Workaround:
   `default_scope { select("id, …") }` with unqualified column names. Adapter
@@ -230,7 +230,7 @@ NodeDB-side parser quirks the adapter has to dance around. Each is tracked in
   it (pending adapter task).
 - **BUG-001 (`ResourcesExhausted` on non-timeseries INSERT).** Fixed
   upstream in `nodedb/src/config/engine.rs` + `memory/startup.rs`. See
-  `../bugs/001-*.md`.
+  `docs/bugs/001-*.md`.
 
 ## License
 
