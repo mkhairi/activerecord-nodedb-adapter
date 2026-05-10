@@ -58,13 +58,10 @@ default: &default
   password: <%= ENV["NODEDB_PASSWORD"] %>
 ```
 
-In Rails 8 development, also disable the migration check (NodeDB has no
-`schema_migrations` table):
-
-```ruby
-# config/environments/development.rb
-config.active_record.migration_error = false
-```
+The standard `migration_error: :page_load` Rails default works — the
+adapter ships NodeDB-aware `SchemaMigration` and `InternalMetadata`
+classes (see *Schema migrations* below) so AR can track applied
+migrations as a regular `schema_migrations` collection.
 
 ## Engines
 
@@ -227,6 +224,39 @@ ActiveRecord::Base.connection.quote({ "k" => 1 })
 # => "'{\"k\":1}'"
 ```
 
+## Schema migrations
+
+The adapter ships NodeDB-aware replacements for
+`ActiveRecord::SchemaMigration` and `ActiveRecord::InternalMetadata`.
+They auto-register on connection — Rails' standard migration tooling
+works out of the box:
+
+```ruby
+# Create the tracking collections (idempotent)
+connection_pool = ActiveRecord::Base.connection_pool
+connection_pool.schema_migration.create_table   # CREATE COLLECTION schema_migrations ...
+connection_pool.internal_metadata.create_table  # CREATE COLLECTION ar_internal_metadata ...
+
+# Record an already-applied migration
+connection_pool.schema_migration.create_version("20260101000000")
+
+# Inspect
+connection_pool.schema_migration.versions
+# => ["20260101000000"]
+```
+
+`rails db:migrate`, `rails db:rollback`, and the dev-mode
+`migration_error: :page_load` check all work against these collections.
+
+Implementation notes:
+
+- `CREATE COLLECTION schema_migrations (id TEXT PRIMARY KEY) WITH (engine='document_strict')`
+- Lookup keys (versions, metadata keys) live in NodeDB's mandatory `id`
+  column; declaring a non-`id` PK triggers a duplicate-empty-id collision
+  on the second INSERT (NodeDB upstream quirk).
+- DELETE path uses the BUG-008 workaround so `db:rollback` actually
+  persists the version removal.
+
 ## Per-call session settings
 
 `with_settings { … }` sets NodeDB session variables for the duration of the
@@ -260,6 +290,9 @@ end
       `create_spatial`, `create_document_strict`
 - [x] `engine_options:` kwarg threads arbitrary settings into the WITH clause
 - [x] Custom `SchemaCreation` for engine-aware DDL serialization
+- [x] NodeDB-aware `SchemaMigration` + `InternalMetadata` so `rails db:migrate`
+      and `migration_error: :page_load` work against `schema_migrations` /
+      `ar_internal_metadata` collections
 - [x] Type casters: `attribute :col, :vector` / `:json` / `:geometry`
 - [x] Quoting hooks: `Array<Numeric>` → VECTOR literal, `Hash` → JSON literal
 - [x] `connection.with_settings { … }` block for scoped session vars
@@ -276,7 +309,6 @@ end
       `{ "result" => "<json>" }`)
 - [ ] SQL rewriter to strip the `"table".col` qualifier so AR's default
       projection (`SELECT "articles".*`) returns flat columns
-- [ ] Stub `schema_migrations` reads so `migration_error: :page_load` works
 - [ ] Silence harmless `INSERT EDGE` `pg`-gem stderr warnings
 - [ ] Generators (`rails g nodedb:collection`, `nodedb:vector_index`)
 - [ ] `db:seed` / `db:migrate:status` integration
@@ -306,8 +338,10 @@ NodeDB-side parser quirks the adapter has to dance around. Each is tracked in
   array of node IDs.** The Graph concern parses that automatically.
 - **GRAPH INSERT EDGE now requires `IN 'collection'`.** Builder updated; if
   you call the SQL builder directly you must pass `in_collection:`.
-- **No `schema_migrations` table.** Disable `migration_error` in dev or stub
-  it (pending adapter task).
+- **`schema_migrations` table.** Resolved — adapter ships NodeDB-aware
+  `SchemaMigration` / `InternalMetadata` subclasses; `migration_error:
+  :page_load` and `rails db:migrate` work against
+  `CREATE COLLECTION ... WITH (engine='document_strict')` collections.
 - **BUG-001 (`ResourcesExhausted` on non-timeseries INSERT).** Fixed
   upstream in `nodedb/src/config/engine.rs` + `memory/startup.rs`. See
   `docs/bugs/001-*.md`.
