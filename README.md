@@ -38,12 +38,33 @@ handling and SQL building.
 
 ## Installation
 
+Both this gem and `nodedb-ruby` are alpha and not yet on rubygems. Pull
+from GitHub via Bundler's `github:` shorthand:
+
+```ruby
+gem "pg", "~> 1.5"
+gem "nodedb-ruby",                 github: "mkhairi/nodedb-ruby",                 branch: "main"
+gem "activerecord-nodedb-adapter", github: "mkhairi/activerecord-nodedb-adapter", branch: "main"
+```
+
+For SSH-only setups: `bundle config github.https false` (one-time).
+
+Working sample: <https://github.com/mkhairi/nodedb-on-rails> — Rails 8.1
+app exercising every NodeDB engine.
+
+For monorepo development against local checkouts:
+
+```ruby
+gem "nodedb-ruby",                 path: "../nodedb-ruby"
+gem "activerecord-nodedb-adapter", path: "../activerecord-nodedb-adapter"
+```
+
+Once the gems ship to rubygems, the standard form will work:
+
 ```ruby
 gem "activerecord-nodedb-adapter"
 gem "pg", "~> 1.5"
 ```
-
-`activerecord-nodedb-adapter` depends on `nodedb-ruby`; both ship together.
 
 ## Configuration
 
