@@ -34,7 +34,7 @@ handling and SQL building.
 | Test suite        | 13 examples / 0 failures / 0 pending |
 | Rails versions    | 7.1+, 8.x verified |
 | Ruby versions     | 3.2+ (developed on 4.0.1) |
-| Sample app        | `../sample_rails_app` (Rails 8.1, full CRUD demo) |
+| Sample app        | `../../sample_rails_app` (Rails 8.1, full CRUD demo) |
 
 ## Installation
 
@@ -189,7 +189,7 @@ SQL
 - [x] Model concerns: `NodeDB::Vector`, `Graph`, `Timeseries`, `Spatial`, `KV`,
       `FullTextSearch`
 - [x] `drop_collection` rescues missing-collection errors when `if_exists: true`
-- [x] Sample Rails 8 app with full CRUD walkthrough (`../sample_rails_app`)
+- [x] Sample Rails 8 app with full CRUD walkthrough (`../../sample_rails_app`)
 
 ### Pending
 - [ ] Auto-unwrap of schemaless `SELECT *` rows (currently returns
