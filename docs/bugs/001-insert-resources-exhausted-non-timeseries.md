@@ -1,6 +1,6 @@
 # BUG-001: INSERT returns "ResourcesExhausted" on all non-timeseries engines
 
-## Status: RESOLVED (2026-05-10)
+## Status: TEMP RESOLVED (2026-05-10) [NodeDB Fork](https://github.com/mkhairi/nodedb/tree/test/rubygems) - [Changes](https://github.com/NodeDB-Lab/nodedb/compare/main...mkhairi:nodedb:test/rubygems?expand=1)
 
 Fixed upstream in NodeDB Rust source. Two-part fix:
 
