@@ -2,7 +2,7 @@
 
 > ## ⚠️ ALPHA — DO NOT USE IN PRODUCTION
 >
-> Version: **`0.1.0.alpha.1`**.
+> Version: **`0.1.0.alpha.2`**.
 >
 > This adapter is **experimental and unaudited**. It has **never been used or
 > tested in any production environment**. The migration DSL, model concerns,
@@ -348,7 +348,7 @@ end
 - [ ] Silence harmless `INSERT EDGE` `pg`-gem stderr warnings
 - [ ] Generators (`rails g nodedb:collection`, `nodedb:vector_index`)
 - [ ] Connection pool aware fixtures helper for RSpec
-- [ ] CHANGELOG.md
+- [x] CHANGELOG.md
 - [ ] gemspec push to RubyGems (currently consumed via `path:`)
 
 ## Known issues
