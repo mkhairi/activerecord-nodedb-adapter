@@ -43,6 +43,7 @@ handling and SQL building.
 | Test suite        | 13 examples / 0 failures / 0 pending |
 | Rails versions    | 7.1+, 8.x verified |
 | Ruby versions     | 3.2+ (developed on 4.0.1) |
+| NodeDB versions   | 0.1.x, 0.2.0, **0.2.1** (latest retest 2026-05-15 — see *Known issues*) |
 | Sample app        | [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails) (Rails 8.1, full CRUD demo across every NodeDB engine) |
 
 ## Installation
@@ -304,7 +305,8 @@ end
 
 - Ruby 3.2+
 - Rails 7.1+ (verified on 8.1.3)
-- NodeDB v0.1+ (pgwire on port 6432)
+- NodeDB v0.1+ (pgwire on port 6432) — **v0.2.1 recommended** (resolves
+  BUG-004 / BUG-008 / BUG-009 / BUG-017 upstream)
 
 ## Feature checklist
 
@@ -352,16 +354,26 @@ end
 ## Known issues
 
 NodeDB-side parser quirks and limits, grouped by status. Each is tracked
-in `docs/bugs/`.
+in `docs/bugs/`. Last retested: **2026-05-15** against **NodeDB v0.2.1**.
 
 ### Resolved upstream
 
 - **BUG-001** `ResourcesExhausted` on non-timeseries INSERT — fixed in
   `nodedb/src/config/engine.rs` + `memory/startup.rs`.
+- **BUG-004** `DROP COLLECTION IF EXISTS` parser quirk — fixed in v0.2.1;
+  adapter `drop_collection(if_exists:)` rescue kept for compat with older
+  binaries.
 - **BUG-005** Prepared statements missing `RowDescription` — fixed
   upstream; adapter still uses simple-query mode for safety.
 - **BUG-006** Boolean column OID 0 — fixed upstream; no `unknown OID`
   warnings emitted.
+- **BUG-008** DELETE inside transaction silently dropped — fixed in v0.2.1;
+  adapter `exec_delete` workaround kept for compat with older binaries.
+- **BUG-009** `INSERT` command tag missing OID slot — fixed in v0.2.1
+  (`INSERT 0 N` form now emitted); no more libpq stderr noise on INSERT.
+- **BUG-017** `SHOW server_version` stuck at `NodeDB 0.1.0` after upstream
+  bump — fixed in v0.2.1 via upstream PR #114; wire version now sources
+  from `crate::version::VERSION`.
 
 ### Adapter compensates transparently
 
@@ -372,7 +384,8 @@ You write idiomatic AR; the adapter swallows the workaround:
   db:migrate` and `migration_error: :page_load` work normally.
 - **BUG-008** DELETE inside transaction silently dropped — `exec_delete`
   override commits + re-issues the DELETE outside the AR-opened
-  transaction so `record.destroy` actually persists.
+  transaction so `record.destroy` actually persists. Resolved upstream
+  in v0.2.1; workaround kept for older binary compat.
 - **BUG-010** `text_match()` predicate doesn't filter rows — `fts_search`
   drops rows whose `bm25_score` is null.
 - **BUG-013** FTS fuzzy mode returns single `result` column wrapping JSON
@@ -416,25 +429,29 @@ declaration:
   `SHOW server_version` instead.
 - **BUG-003** `PQserverVersion()` raises `PG::ConnectionBad` — adapter
   hardcodes `160000` for `database_version` / `get_database_version`.
-- **BUG-004** `DROP COLLECTION IF EXISTS` parses `IF` as a collection
-  name when target is present — `drop_collection(if_exists:)` rescues
-  the not-found error instead.
-- **BUG-009** `INSERT` command tag missing OID slot — produces stderr
-  noise on every successful INSERT. Tracked; covered case-by-case via
-  `silence_libpq_noise`.
-- **BUG-011** Spatial INSERT does not evaluate `ST_GeomFromText` —
-  values stored as literal SQL text. Sample app uses `document_strict`
-  engine with explicit `lat FLOAT, lon FLOAT` columns and computes
-  haversine in Ruby.
+- **BUG-011** Spatial INSERT with `ST_GeomFromText` — v0.2.1 changed
+  behaviour from silent text-store to a hard
+  `unsupported: value expression: ST_GeomFromText(...)` error. Better
+  diagnostics, but spatial engine still unusable for real coordinate
+  work. Sample app uses `document_strict` with explicit
+  `lat FLOAT, lon FLOAT` columns and computes haversine in Ruby.
 - **BUG-012** Spatial engine drops non-geometry typed columns silently
   on INSERT. Combined with BUG-011, no working storage path exists in
   the spatial engine today.
-- **DROP+CREATE preserves rows within retention window.** NodeDB
-  soft-deletes the storage; a fresh `CREATE COLLECTION` of the same name
-  resurrects the old rows. Use `UNDROP COLLECTION name` then
+- **BUG-014** `pg_try_advisory_lock` / `pg_advisory_unlock` — v0.2.1
+  partially fixed: parser now recognises the functions, but they return
+  empty rows instead of booleans. Adapter `get_advisory_lock` /
+  `release_advisory_lock` no-op stubs still required.
+- **DROP+CREATE preserves rows within retention window** (BUG-015).
+  NodeDB soft-deletes the storage; a fresh `CREATE COLLECTION` of the
+  same name resurrects the old rows. Use `UNDROP COLLECTION name` then
   `DELETE FROM name` to clear, or wait for the retention window to
   expire. `bin/setup` in the sample app reconciles this for
   `schema_migrations` automatically.
+- **BUG-016** `document_strict` 2nd INSERT collides on empty `id` when
+  primary key is on a non-`id` column. Adapter stores user keys in the
+  built-in `id` column for `schema_migrations` / `ar_internal_metadata`
+  to sidestep this.
 
 ## License
 
