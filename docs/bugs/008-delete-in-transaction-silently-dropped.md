@@ -1,6 +1,23 @@
 # BUG-008: DELETE inside transaction silently dropped on COMMIT
 
-## Status: OPEN (2026-05-10)
+## Status: RESOLVED upstream — NodeDB v0.2.1 (retested 2026-05-15)
+
+`DELETE` inside `BEGIN; ... COMMIT;` now persists:
+
+```sql
+INSERT INTO t (id) VALUES ('x');
+BEGIN;
+DELETE FROM t WHERE id = 'x';
+COMMIT;
+SELECT id FROM t;
+-- (0 rows)
+```
+
+Adapter `NodedbAdapter#exec_delete` workaround (re-issuing DELETE outside the
+AR-opened txn) is now redundant but harmless; leave in place for backward
+compatibility with older NodeDB binaries.
+
+### Earlier history (OPEN, 2026-05-10)
 
 ## Summary
 
