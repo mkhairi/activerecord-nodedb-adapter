@@ -1,6 +1,20 @@
 # BUG-014: pg_try_advisory_lock / pg_advisory_unlock missing
 
-## Status: OPEN (2026-05-10)
+## Status: PARTIAL — NodeDB v0.2.1 (retested 2026-05-15)
+
+Functions are now recognised by the parser but return empty results
+(silent no-ops, no boolean):
+
+```sql
+SELECT pg_try_advisory_lock(1);  -- single empty row, no value
+SELECT pg_advisory_unlock(1);    -- same
+```
+
+AR expected a boolean; empty value is falsy. Adapter no-op stub
+(`get_advisory_lock` / `release_advisory_lock` returning `true`) still
+required until upstream returns proper booleans.
+
+### Earlier history (OPEN, 2026-05-10)
 
 NodeDB pgwire does not implement PostgreSQL's session-scoped advisory
 lock functions (`pg_try_advisory_lock(N)` / `pg_advisory_unlock(N)`).

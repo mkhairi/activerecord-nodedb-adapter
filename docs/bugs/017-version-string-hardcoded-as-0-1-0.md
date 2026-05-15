@@ -1,6 +1,17 @@
 # BUG-017: server_version stuck at "NodeDB 0.1.0" after upstream bumped to 0.2.0
 
-## Status: OPEN (2026-05-15)
+## Status: RESOLVED upstream — NodeDB v0.2.1 (retested 2026-05-15)
+
+Merged in upstream PR #114. Every wire surface now sources from
+`crate::version::VERSION` (was `CARGO_PKG_VERSION` per the original fix;
+upstream maintainer refactored further). Verified:
+
+```sql
+SHOW server_version;
+-- NodeDB 0.2.1
+```
+
+### Earlier history (OPEN, 2026-05-15)
 
 NodeDB's workspace `Cargo.toml` declares `version = "0.2.0"` but four
 pgwire / RESP / sync call sites in `nodedb/src/control/server/**`

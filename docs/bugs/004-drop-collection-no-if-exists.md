@@ -1,6 +1,19 @@
 # BUG-004: DROP COLLECTION IF EXISTS broken when collection exists
 
-## Status: OPEN (retested 2026-05-10)
+## Status: RESOLVED upstream — NodeDB v0.2.1 (retested 2026-05-15)
+
+`DROP COLLECTION IF EXISTS name` now works correctly in both cases:
+
+```sql
+CREATE COLLECTION foo (id TEXT PRIMARY KEY) WITH (engine='document_strict');
+DROP COLLECTION IF EXISTS foo;             -- DROP COLLECTION (existed)
+DROP COLLECTION IF EXISTS nonexistent_xyz; -- DROP COLLECTION (silent)
+```
+
+Adapter `drop_collection(if_exists:)` rescue is now redundant but harmless;
+leave in place for backward compatibility with older NodeDB binaries.
+
+### Earlier history (OPEN, 2026-05-10)
 
 Still reproduces. When the collection exists,
 `DROP COLLECTION IF EXISTS name` fails with `ERROR: collection 'if' does not exist`.

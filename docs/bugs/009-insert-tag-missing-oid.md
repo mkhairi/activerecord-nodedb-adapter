@@ -1,6 +1,16 @@
 # BUG-009: INSERT command tag missing OID slot triggers libpq noise
 
-## Status: OPEN (2026-05-10)
+## Status: RESOLVED upstream — NodeDB v0.2.1 (retested 2026-05-15)
+
+INSERT command tags now conform to PostgreSQL's `INSERT 0 N` form. No more
+`could not interpret result from server: INSERT N` stderr noise from libpq
+or the `pg` Ruby gem.
+
+`NodeDB::Graph.silence_libpq_noise` filter in the adapter still useful for
+`GRAPH TRAVERSE`, `INSERT EDGE`, etc. command tags; INSERT no longer needs
+filtering.
+
+### Earlier history (OPEN, 2026-05-10)
 
 ## Summary
 
