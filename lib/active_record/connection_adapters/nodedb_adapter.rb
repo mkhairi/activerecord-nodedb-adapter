@@ -116,12 +116,16 @@ module ActiveRecord
         true
       end
 
-      # NodeDB BUG-008: DELETE inside BEGIN;...COMMIT; is silently dropped on
-      # commit. UPDATE/INSERT in the same transaction work fine.
+      # NodeDB BUG-008 (PARTIAL fix in v0.2.1): DELETE inside BEGIN;...COMMIT;
+      # is silently dropped on commit when the target collection's primary key
+      # column is declared with an explicit `NOT NULL PRIMARY KEY` clause --
+      # which is exactly what ActiveRecord emits for every PK. Plain
+      # `PRIMARY KEY` (implicit NOT NULL) works correctly on v0.2.1+.
+      # UPDATE/INSERT in the same transaction work fine.
       #
       # AR wraps `record.destroy` in an implicit transaction (and Rails 8 uses
       # lazy transactions, so BEGIN is materialized as part of the DELETE
-      # call), meaning every destroy() silently no-ops.
+      # call), meaning every destroy() silently no-ops without this override.
       #
       # Workaround: after the AR-issued DELETE runs, if a transaction is still
       # open, commit it, re-issue the same DELETE outside any transaction
@@ -134,7 +138,8 @@ module ActiveRecord
       # Acceptable for record.destroy (the only mutation in a single record's
       # destroy lifecycle is the DELETE itself).
       #
-      # Remove this override once NodeDB persists DELETE inside transactions.
+      # Remove this override once NodeDB persists DELETE inside transactions
+      # for collections with `NOT NULL PRIMARY KEY` columns.
       def exec_delete(sql, name = nil, binds = [])
         result = super
         if transaction_open?

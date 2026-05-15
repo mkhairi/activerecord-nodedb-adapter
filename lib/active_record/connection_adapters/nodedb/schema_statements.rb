@@ -73,14 +73,13 @@ module ActiveRecord
           raise unless e.message.include?("does not exist")
         end
 
-        # Drop a collection (NodeDB dialect).
-        # NodeDB's IF EXISTS is partially broken (BUG-004): parses correctly when
-        # collection is absent but treats 'IF' as a collection name when it exists.
-        # Workaround: always use plain DROP COLLECTION and rescue the not-found error.
         def drop_collection(collection_name, if_exists: false)
-          execute_nodedb(NodeDB::SQL::Collection.drop(collection_name.to_s))
-        rescue ActiveRecord::StatementInvalid => e
-          raise unless if_exists && e.message.include?("does not exist")
+          sql = if if_exists
+                  NodeDB::SQL::Collection.drop_if_exists(collection_name.to_s)
+                else
+                  NodeDB::SQL::Collection.drop(collection_name.to_s)
+                end
+          execute_nodedb(sql)
         end
 
         # List all collections in the current database.

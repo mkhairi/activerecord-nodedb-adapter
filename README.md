@@ -2,7 +2,7 @@
 
 > ## ⚠️ ALPHA — DO NOT USE IN PRODUCTION
 >
-> Version: **`0.1.0.alpha.2`**.
+> Version: **`0.1.0.alpha.3`**.
 >
 > This adapter is **experimental and unaudited**. It has **never been used or
 > tested in any production environment**. The migration DSL, model concerns,
@@ -306,7 +306,7 @@ end
 - Ruby 3.2+
 - Rails 7.1+ (verified on 8.1.3)
 - NodeDB v0.1+ (pgwire on port 6432) — **v0.2.1 recommended** (resolves
-  BUG-004 / BUG-008 / BUG-009 / BUG-017 upstream)
+  BUG-004 / BUG-009 / BUG-017 upstream; BUG-008 PARTIAL)
 
 ## Feature checklist
 
@@ -361,14 +361,12 @@ in `docs/bugs/`. Last retested: **2026-05-15** against **NodeDB v0.2.1**.
 - **BUG-001** `ResourcesExhausted` on non-timeseries INSERT — fixed in
   `nodedb/src/config/engine.rs` + `memory/startup.rs`.
 - **BUG-004** `DROP COLLECTION IF EXISTS` parser quirk — fixed in v0.2.1;
-  adapter `drop_collection(if_exists:)` rescue kept for compat with older
-  binaries.
+  adapter `drop_collection(if_exists:)` now emits the native form
+  directly (rescue workaround retired in 0.1.0.alpha.3).
 - **BUG-005** Prepared statements missing `RowDescription` — fixed
   upstream; adapter still uses simple-query mode for safety.
 - **BUG-006** Boolean column OID 0 — fixed upstream; no `unknown OID`
   warnings emitted.
-- **BUG-008** DELETE inside transaction silently dropped — fixed in v0.2.1;
-  adapter `exec_delete` workaround kept for compat with older binaries.
 - **BUG-009** `INSERT` command tag missing OID slot — fixed in v0.2.1
   (`INSERT 0 N` form now emitted); no more libpq stderr noise on INSERT.
 - **BUG-017** `SHOW server_version` stuck at `NodeDB 0.1.0` after upstream
@@ -384,8 +382,11 @@ You write idiomatic AR; the adapter swallows the workaround:
   db:migrate` and `migration_error: :page_load` work normally.
 - **BUG-008** DELETE inside transaction silently dropped — `exec_delete`
   override commits + re-issues the DELETE outside the AR-opened
-  transaction so `record.destroy` actually persists. Resolved upstream
-  in v0.2.1; workaround kept for older binary compat.
+  transaction so `record.destroy` actually persists. PARTIAL fix in
+  v0.2.1: NodeDB persists DELETE inside txn when the PK column lacks an
+  explicit `NOT NULL` keyword, but AR's emitted DDL is always
+  `"id" text NOT NULL PRIMARY KEY` — so the broken path still applies.
+  Workaround stays.
 - **BUG-010** `text_match()` predicate doesn't filter rows — `fts_search`
   drops rows whose `bm25_score` is null.
 - **BUG-013** FTS fuzzy mode returns single `result` column wrapping JSON
