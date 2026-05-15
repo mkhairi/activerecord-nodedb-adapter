@@ -11,11 +11,11 @@ Last refreshed: **2026-05-15** against **NodeDB v0.2.1**.
 | 001 | INSERT returns `ResourcesExhausted` on non-timeseries engines | RESOLVED — fixed in nodedb v0.2.0 (`EngineConfig` covers all 15 engines) |
 | 002 | `SELECT version()` returns empty | OPEN — adapter uses `SHOW server_version` |
 | 003 | `PQserverVersion()` raises `PG::ConnectionBad` | OPEN — adapter hardcodes `160000` |
-| 004 | `DROP COLLECTION IF EXISTS` parses `IF` as a name when collection exists | **RESOLVED** in v0.2.1 — adapter rescue redundant but kept |
+| 004 | `DROP COLLECTION IF EXISTS` parses `IF` as a name when collection exists | **RESOLVED** in v0.2.1 — adapter now emits `DROP COLLECTION IF EXISTS` directly (workaround retired) |
 | 005 | Prepared statements missing `RowDescription` before `DataRow` | RESOLVED |
 | 006 | Unknown OID `0` for boolean column | RESOLVED |
 | 007 | `pg_attribute` query returns duplicate `id` row | PARTIAL — adapter falls back to `DESCRIBE` |
-| 008 | DELETE inside transaction silently dropped | **RESOLVED** in v0.2.1 — adapter `exec_delete` workaround redundant but kept |
+| 008 | DELETE inside transaction silently dropped | **PARTIAL** in v0.2.1 — fixed only when PK column lacks explicit `NOT NULL`; AR DDL still hits the broken path; `exec_delete` workaround still required |
 | 009 | INSERT command tag missing OID slot | **RESOLVED** in v0.2.1 — `INSERT 0 N` form now emitted |
 | 010 | `text_match()` predicate doesn't filter rows | OPEN — adapter filters by `bm25_score` (PR #15) |
 | 011 | Spatial INSERT does not evaluate `ST_GeomFromText` | CHANGED — now hard error (was silent text store); spatial engine still unusable |
@@ -32,20 +32,24 @@ Last refreshed: **2026-05-15** against **NodeDB v0.2.1**.
 | --- | --------- |
 | 002 | `nodedb_version` reads `SHOW server_version` |
 | 003 | `database_version` / `get_database_version` return hardcoded `160000`; `check_version` is a no-op |
-| 004 | `drop_collection(if_exists:)` rescues `StatementInvalid` matching `/does not exist/` (redundant on v0.2.1+, kept for older binaries) |
 | 007 | `column_definitions` falls back to `DESCRIBE` and de-duplicates the result |
-| 008 | `NodedbAdapter#exec_delete` re-issues DELETE outside any AR-opened transaction (redundant on v0.2.1+, kept for older binaries) |
+| 008 | `NodedbAdapter#exec_delete` re-issues DELETE outside any AR-opened transaction (still required on v0.2.1 — fix is conditional, AR's `NOT NULL PRIMARY KEY` DDL hits the broken path) |
 | 010, 013 | `NodeDB::FullTextSearch#fts_search` projects `id, bm25_score`, filters nulls, JSON-unwraps fuzzy rows |
 | 014 | `NodedbAdapter#get_advisory_lock` / `#release_advisory_lock` no-op pair returning `true` (still needed — upstream returns empty, not boolean) |
 | 016 | `Nodedb::SchemaMigration` / `Nodedb::InternalMetadata` declare PK on the built-in `id` column |
 
 ## Workaround retirement strategy
 
-Several workarounds (004, 008, 009) are now redundant on NodeDB v0.2.1
-but are kept for compatibility with older binaries. When the adapter
-drops support for NodeDB < 0.2.1 (probably at beta release), remove via
-`chore/remove-bugNNN-workaround` PRs and close the corresponding
-tracking issues.
+- **004** workaround retired on v0.2.1: adapter now emits
+  `DROP COLLECTION IF EXISTS` directly.
+- **008** workaround **kept** on v0.2.1: the upstream fix is conditional
+  on the column schema (works for implicit `NOT NULL`, broken for the
+  explicit `NOT NULL PRIMARY KEY` AR emits). Retest each future NodeDB
+  release; retire when AR's emitted DDL persists DELETE inside txn.
+- **009** had no adapter code workaround in the first place — the libpq
+  noise filter only covered `INSERT EDGE` / `GRAPH ...`, never plain
+  INSERT. Documented for completeness.
 
-When NodeDB upstream resolves a bug, update the status above and the
-per-bug doc, then ship the workaround removal as a separate PR.
+When NodeDB upstream fully resolves a bug, update the status above and
+the per-bug doc, then ship the workaround removal as a separate PR
+named `chore/remove-bugNNN-workaround`.

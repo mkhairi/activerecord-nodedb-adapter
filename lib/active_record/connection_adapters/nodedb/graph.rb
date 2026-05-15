@@ -30,8 +30,10 @@ module NodeDB
         NodeDB::Graph.silence_libpq_noise { connection.execute(sql) }
       end
 
-      # Returns an Array of node ID strings.
-      # NodeDB GRAPH TRAVERSE returns a single row: result = JSON array of IDs.
+      # Returns an Array of node ID strings reachable from `from` within
+      # `depth` hops. NodeDB v0.2.x emits a JSON object with `nodes`/`edges`
+      # keys; older versions emitted a flat array of IDs. Both are handled.
+      # The starting node (`from`) is filtered out.
       def graph_traverse(from:, depth: 1, direction: :both)
         sql = NodeDB::SQL::Graph.traverse(
           from:      connection.quote(from),
@@ -39,7 +41,16 @@ module NodeDB
           direction: direction
         )
         raw = NodeDB::Graph.silence_libpq_noise { connection.select_all(sql) }
-        JSON.parse(raw.first&.fetch("result", "[]") || "[]")
+        payload = JSON.parse(raw.first&.fetch("result", "[]") || "[]")
+
+        ids =
+          case payload
+          when Array then payload
+          when Hash  then Array(payload["nodes"]).map { |n| n["id"] }.compact
+          else            []
+          end
+
+        ids - [from.to_s]
       end
 
       def graph_algo(algo, **options)

@@ -1,23 +1,44 @@
 # BUG-008: DELETE inside transaction silently dropped on COMMIT
 
-## Status: RESOLVED upstream — NodeDB v0.2.1 (retested 2026-05-15)
+## Status: PARTIAL — NodeDB v0.2.1 (re-retested 2026-05-15)
 
-`DELETE` inside `BEGIN; ... COMMIT;` now persists:
+Fix is **conditional on collection schema**:
+
+- `id TEXT PRIMARY KEY` (implicit `NOT NULL`) — DELETE inside
+  `BEGIN; ... COMMIT;` now persists correctly.
+- `id TEXT NOT NULL PRIMARY KEY` (explicit `NOT NULL`) — DELETE is still
+  silently dropped on COMMIT.
+
+ActiveRecord emits `"id" text NOT NULL PRIMARY KEY` for every primary key
+column, so every adapter-driven `record.destroy` still hits the broken path.
+**Adapter `NodedbAdapter#exec_delete` workaround remains required on v0.2.1+.**
+
+### Minimal reproduction (psql, fresh collection name to dodge BUG-015)
 
 ```sql
-INSERT INTO t (id) VALUES ('x');
-BEGIN;
-DELETE FROM t WHERE id = 'x';
-COMMIT;
-SELECT id FROM t;
--- (0 rows)
+-- WORKS (implicit NOT NULL)
+CREATE COLLECTION t_ok (id TEXT PRIMARY KEY) WITH (engine='document_strict');
+INSERT INTO t_ok (id) VALUES ('x');
+BEGIN; DELETE FROM t_ok WHERE id='x'; COMMIT;
+SELECT id FROM t_ok WHERE id='x';   -- (0 rows)
+
+-- BROKEN (explicit NOT NULL — what AR emits)
+CREATE COLLECTION t_ar (id TEXT NOT NULL PRIMARY KEY) WITH (engine='document_strict');
+INSERT INTO t_ar (id) VALUES ('x');
+BEGIN; DELETE FROM t_ar WHERE id='x'; COMMIT;
+SELECT id FROM t_ar WHERE id='x';   -- row still present
 ```
 
-Adapter `NodedbAdapter#exec_delete` workaround (re-issuing DELETE outside the
-AR-opened txn) is now redundant but harmless; leave in place for backward
-compatibility with older NodeDB binaries.
+(Use a fresh collection name on every retry — BUG-015's DROP+CREATE retention
+window will resurrect deleted rows if the name was used recently and mask
+this bug's behaviour.)
 
-### Earlier history (OPEN, 2026-05-10)
+### Earlier history (OPEN, 2026-05-10; "RESOLVED" mis-call 2026-05-15 morning)
+
+An earlier 2026-05-15 retest used DDL without an explicit `NOT NULL` and
+saw DELETE persisting; that retest flipped the doc/issue to RESOLVED. The
+afternoon re-retest discovered the schema-conditional nature of the fix and
+walked the status back to PARTIAL — AR's DDL still triggers the bug.
 
 ## Summary
 

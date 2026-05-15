@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.3] — 2026-05-15
+
+### Removed
+- **BUG-004 workaround retired.** `drop_collection(if_exists: true)` now
+  emits `DROP COLLECTION IF EXISTS` directly via
+  `NodeDB::SQL::Collection.drop_if_exists` instead of rescuing a "does not
+  exist" `StatementInvalid`. Both code paths verified against NodeDB
+  v0.2.1.
+
+### Changed
+- **BUG-008 status walked back from RESOLVED to PARTIAL.** Re-retest
+  discovered NodeDB v0.2.1's DELETE-in-txn fix is conditional on column
+  schema: works for implicit `NOT NULL`, still silently drops the row
+  when the PK column is declared with explicit `NOT NULL` — which is
+  exactly what ActiveRecord emits. `exec_delete` override **stays** and
+  is now documented as load-bearing on v0.2.1+. Bug doc + tracking issue
+  updated.
+- `graph_traverse` unwraps NodeDB v0.2.x's new
+  `{"nodes":[{"id":...,"depth":N}], "edges":[...]}` response shape back
+  into the documented `Array<String>` of node IDs, with the starting
+  node filtered out. v0.1.x array-of-IDs payloads still pass through.
+
+### Fixed
+- Graph specs (`spec/graph_spec.rb`) updated to assert against the v0.2.x
+  payload shape via the new `graph_traverse` unwrap path.
+
+### Added
+- Specs covering `drop_collection(if_exists: true)` for both missing and
+  existing collection paths.
+- Spec covering `record.destroy` under the BUG-008 conditional fix —
+  asserts the `exec_delete` override still produces the expected
+  "DELETE persists" semantics on collections AR's DDL emits.
+
 ## [0.1.0.alpha.2] — 2026-05-15
 
 ### Added
@@ -94,6 +127,7 @@ Initial alpha. Rails ActiveRecord adapter for NodeDB, extending
   return `true`) — BUG-014 workaround.
 - Upstream bug log seeded.
 
+[0.1.0.alpha.3]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.2...v0.1.0.alpha.3
 [0.1.0.alpha.2]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.1...v0.1.0.alpha.2
 [0.1.0.alpha.1]: https://github.com/mkhairi/activerecord-nodedb-adapter/releases/tag/v0.1.0.alpha.1
 
