@@ -1,4 +1,5 @@
 require "active_record/schema_migration"
+require "json"
 
 module ActiveRecord
   module ConnectionAdapters
@@ -29,9 +30,23 @@ module ActiveRecord
           end
         end
 
+        # Over the native protocol, document_strict SELECT returns the row
+        # as a `{data, id}` blob: the physical `id` is an internal
+        # surrogate and the version we stored lives inside the `data` JSON
+        # (BUG-018, #45). Recover it by parsing `data`. WHERE/INSERT/DELETE
+        # on the logical `id` still resolve natively, so only this read
+        # path needs the unpack. pgwire projects `id` directly.
         def versions
           @pool.with_connection do |connection|
-            connection.execute("SELECT id FROM #{table_name} ORDER BY id ASC").to_a.map { |r| r["id"] }
+            if connection.native_transport?
+              # `SELECT *` is the only projection that reliably yields the
+              # {data,id} blob over native; `SELECT data` returns nothing.
+              connection.execute("SELECT * FROM #{table_name}").to_a
+                .filter_map { |r| JSON.parse(r["data"].to_s)["id"] rescue nil }
+                .sort
+            else
+              connection.execute("SELECT id FROM #{table_name} ORDER BY id ASC").to_a.map { |r| r["id"] }
+            end
           end
         end
 

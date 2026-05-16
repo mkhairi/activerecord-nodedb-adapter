@@ -25,8 +25,10 @@ SchemaMigration#versions          ->  ["00000003","00000004"]   # internal
 return the real values, so AR's migrator believes nothing is applied,
 re-runs `001`, and aborts with `collection 'articles' already exists`.
 
-**Net: `db:migrate` / `db:schema:load` do not work over `transport:
-native`** (BUG-018 blob read-back). A separate, transport-independent
+**~~Net: `db:migrate` / `db:schema:load` do not work over `transport:
+native`~~ — RESOLVED for schema-tracking, see "Key nuance" below.**
+This was the original diagnosis; it held until the point-lookup-vs-scan
+distinction was found. A separate, transport-independent
 defect was fixed along the way: AR's `assume_migrated_upto_version`
 hardcodes `INSERT INTO schema_migrations (version) …`, but
 `schema_migrations` is a `document_strict` collection with only an `id`
@@ -35,9 +37,36 @@ native** — so the `db:schema:load` / `db:prepare` path raised
 `unknown field 'version' not present in strict schema` on pgwire too
 (`bin/setup` sidesteps it via `create_version`→`id`). The adapter now
 always routes version inserts through `SchemaMigration#create_version`
-(`id` column). That removes this layer on both transports; the
-native-only blob-projection gap above is still the gate for native
-migrations.
+(`id` column).
+
+### Key nuance: point-lookups DO project over native (2026-05-16)
+
+The blob behaviour is **scan-shaped**, not blanket:
+
+| Query shape (document_strict, native)        | Result |
+| -------------------------------------------- | ------ |
+| `SELECT * FROM t` (unfiltered full scan)     | `{data, id}` blob — declared columns absent |
+| `SELECT * FROM t WHERE id = '<pk>'` (point)  | **projected columns** (real `value`, `lat`, …) |
+| `SELECT data FROM t`                          | empty (native ignores the literal `data` projection) |
+
+So **schema-tracking is now unblocked on native** without an upstream
+fix:
+
+- `InternalMetadata#[]` already does `WHERE id = <key>` → projects
+  natively, no change needed.
+- `SchemaMigration#versions` is an unfiltered scan → over native it now
+  `SELECT *`s and JSON-parses the stored version out of the `data` blob
+  (`WHERE`/`INSERT`/`DELETE` on the logical `id` resolve natively, so
+  only this read path needs the unpack).
+
+Verified both transports: `versions == ["1".."6"]`,
+`needs_migration? == false`, `pending == []`, `internal_metadata[:environment] == "development"`.
+`db:migrate` / `db:schema:load` / dev `check_pending!` now work over
+`transport: native`. pgwire unchanged (21/21); AR suite 32/0.
+
+The remaining native gap is **runtime full-scan reads on
+document-backed engines** (spatial / FTS / vector raw `SELECT col …`),
+still the upstream parity target below.
 
 ### Practical guidance until upstream parity
 
@@ -116,6 +145,7 @@ NodeDB v0.2.1. PASS = functionally equivalent to pgwire. Update the
 | Engine / area              | pgwire (6432) | native (6433) | Native gap (root cause)                                              |
 | -------------------------- | ------------- | ------------- | -------------------------------------------------------------------- |
 | Connection / `active?`     | PASS          | PASS          | —                                                                    |
+| Schema tracking / migrations | PASS        | PASS          | fixed: point-lookups project; `versions` scan JSON-unpacks `data`     |
 | Collections listing        | PASS          | PASS          | —                                                                    |
 | Document CRUD (model)      | PASS          | PASS          | model path unpacks `data`                                             |
 | Timeseries insert/bucket   | PASS          | PASS          | columnar storage projects natively                                   |
