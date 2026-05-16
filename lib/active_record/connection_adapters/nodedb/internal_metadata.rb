@@ -67,6 +67,9 @@ module ActiveRecord
           return unless enabled?
 
           @pool.with_connection do |connection|
+            # A point-lookup (WHERE id=) projects logical columns even over
+            # native (BUG-018 only blobs unfiltered full-scans), so the
+            # `value` column comes back directly on both transports.
             row = connection.execute(
               "SELECT value FROM #{table_name} WHERE id = #{connection.quote(key.to_s)} LIMIT 1"
             ).first
