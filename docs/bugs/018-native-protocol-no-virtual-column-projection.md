@@ -1,0 +1,124 @@
+# BUG-018: native protocol returns document-backed rows as a raw `{data, id}` blob (no virtual-column projection)
+
+## Status: OPEN (2026-05-16) — NodeDB v0.2.1, **native binary protocol only** (port 6433)
+
+pgwire (port 6432) is **unaffected** — it projects the logical columns
+server-side. This is a native-vs-pgwire behavioural divergence in the
+NodeDB server, surfaced by the adapter's `transport: native` option
+(shipped in activerecord-nodedb-adapter 0.1.0.alpha.4, PR #44).
+
+## Summary
+
+For collections whose rows are stored as a document (`document_strict`,
+and the default document engine used by `create_collection` without an
+`engine:`), the **native** protocol returns every `SELECT` as two
+physical columns:
+
+```
+columns = ["data", "id"]
+data    = <the whole row as a JSON string>
+id      = <internal hex surrogate, e.g. "0000000e">
+```
+
+The **pgwire** protocol, given the identical collection and query,
+expands the declared/logical fields into real result columns
+(`lat`, `lon`, `title`, `bm25_score`, `distance`, …).
+
+The adapter's *model* read path survives because the NodeDB-aware column
+mapping unpacks the document; but **raw `connection.execute` / engine
+helper SQL that expects projected columns gets the blob instead**, so
+spatial, FTS and vector reads return empty/nil over native.
+
+KV (`engine='kv'`) is a separate symptom — its columns *do* project
+(`["key","value"]`), but the KV read helper still raises
+`KeyError: "value"` over native, so it is tracked in the table below as a
+distinct native-read shape mismatch, not the blob issue.
+
+## Reproduction
+
+Same NodeDB instance, same `nodedb` database, same collections (seeded by
+the `nodedb-on-rails` sample app), only the transport differs.
+
+```ruby
+# locations is engine=document_strict (lat FLOAT, lon FLOAT, name TEXT)
+
+# pgwire (6432)
+c.execute("SELECT id, lat, lon FROM locations LIMIT 1").to_a
+# => [{"id"=>"seed_kl", "lat"=>3.139, "lon"=>101.6869}]
+
+# native (6433)
+r = c.execute("SELECT * FROM locations LIMIT 1")
+r.fields           # => ["data", "id"]
+r.values.first     # => ["{\"id\":\"seed_kl\",\"lat\":3.139,\"lon\":101.6869,\"name\":\"Kuala Lumpur\"}", "0000000e"]
+r.to_a.first["lat"] # => nil   (no "lat" column exists in the native result)
+```
+
+Full reproduction = run the sample app's full-engine smoke over each
+transport (`scripts/feature_smoke.rb`):
+
+```bash
+# pgwire baseline
+bundle exec ruby bin/rails runner scripts/feature_smoke.rb
+#   ok: 21  total: 21
+
+# native (establish_connection adapter:"nodedb", transport:"native", port:6433)
+#   ok: 14  fail: 3  error: 2  total: 19
+```
+
+## Transport parity matrix (track this each NodeDB release)
+
+NodeDB v0.2.1. PASS = functionally equivalent to pgwire. Update the
+`native` column on every retest; the goal is full parity.
+
+| Engine / area              | pgwire (6432) | native (6433) | Native gap (root cause)                                              |
+| -------------------------- | ------------- | ------------- | -------------------------------------------------------------------- |
+| Connection / `active?`     | PASS          | PASS          | —                                                                    |
+| Collections listing        | PASS          | PASS          | —                                                                    |
+| Document CRUD (model)      | PASS          | PASS          | model path unpacks `data`                                             |
+| Timeseries insert/bucket   | PASS          | PASS          | columnar storage projects natively                                   |
+| Graph edge/traverse/algo   | PASS          | PASS          | graph dispatch projects natively                                     |
+| KV set/get/exists/delete   | PASS          | **FAIL**      | KV read helper shape mismatch (`KeyError "value"`); columns *do* project — distinct from blob issue |
+| Spatial roundtrip          | PASS          | **FAIL**      | document_strict → `{data,id}` blob; `lat`/`lon` columns absent       |
+| FTS search / fuzzy         | PASS          | **FAIL**      | FTS rows come back as blob; `bm25_score`/projected cols absent → 0 hits |
+| Vector search              | PASS          | **ERR**       | document collection → blob; `distance` column nil → TypeError        |
+| **Totals**                 | **21/21**     | **14 / 19**   |                                                                      |
+
+## Expected
+
+The native protocol should project a document collection's logical
+columns into the result set the same way pgwire does (i.e. `SELECT lat,
+lon FROM locations` yields `lat`/`lon` columns, not a single `data`
+JSON string). Result-set column semantics should not depend on the
+transport.
+
+## Impact
+
+- `transport: native` is **not yet at functional parity** with pgwire
+  for KV / spatial / FTS / vector reads. It IS solid for connection,
+  DDL, document model CRUD, timeseries and graph.
+- Any code doing raw `connection.execute("SELECT col …")` on a
+  document-backed collection over native gets the JSON blob instead of
+  the column.
+
+## Adapter workaround
+
+None shipped. The adapter faithfully returns what the native protocol
+sends; `NativePGCompat` is not the cause (pgwire path is unaffected and
+green).
+
+Phase-2 option (real feature, not a quick patch): on native, detect
+document-backed collections (via `DESCRIBE` / collection engine) and
+JSON-expand the `data` blob into the requested logical columns for raw
+`execute` and the engine helpers, mirroring what pgwire does
+server-side. Deferred until the upstream stance is known — a server-side
+fix is the correct layer.
+
+## Upstream fix sketch
+
+The native result encoder for document-backed engines should run the
+same projection/column-materialisation step the pgwire result path
+already runs, rather than emitting the raw storage tuple `(data, id)`.
+Parity target: identical `columns` + row values for the same SQL
+regardless of transport.
+
+GitHub issue: mkhairi/activerecord-nodedb-adapter#45
