@@ -144,17 +144,19 @@ NodeDB v0.2.1. PASS = functionally equivalent to pgwire. Update the
 
 | Engine / area              | pgwire (6432) | native (6433) | Native gap (root cause)                                              |
 | -------------------------- | ------------- | ------------- | -------------------------------------------------------------------- |
-| Connection / `active?`     | PASS          | PASS          | —                                                                    |
-| Schema tracking / migrations | PASS        | PASS          | fixed: point-lookups project; `versions` scan JSON-unpacks `data`     |
-| Collections listing        | PASS          | PASS          | —                                                                    |
-| Document CRUD (model)      | PASS          | PASS          | model path unpacks `data`                                             |
-| Timeseries insert/bucket   | PASS          | PASS          | columnar storage projects natively                                   |
-| Graph edge/traverse/algo   | PASS          | PASS          | graph dispatch projects natively                                     |
-| KV set/get/exists/delete   | PASS          | **FAIL**      | KV read helper shape mismatch (`KeyError "value"`); columns *do* project — distinct from blob issue |
-| Spatial roundtrip          | PASS          | **FAIL**      | document_strict → `{data,id}` blob; `lat`/`lon` columns absent       |
-| FTS search / fuzzy         | PASS          | **FAIL**      | FTS rows come back as blob; `bm25_score`/projected cols absent → 0 hits |
-| Vector search              | PASS          | **ERR**       | document collection → blob; `distance` column nil → TypeError        |
-| **Totals**                 | **21/21**     | **14 / 19**   |                                                                      |
+| Connection / `active?`        | PASS       | PASS          | —                                                                    |
+| Schema tracking / migrations  | PASS       | PASS          | point-lookups project; shim normalises the scan blob                 |
+| Collections listing           | PASS       | PASS          | —                                                                    |
+| Document CRUD (model)         | PASS       | PASS          | —                                                                    |
+| Doc collection reads (`.all`/`.first`/scopes/index) | PASS | PASS | **fixed**: `NativePGCompat::Result` normalises both native shapes |
+| Timeseries insert/bucket      | PASS       | PASS          | —                                                                    |
+| Graph edge/traverse/algo      | PASS       | PASS          | —                                                                    |
+| Spatial roundtrip             | PASS       | PASS          | **fixed** by the result normaliser                                   |
+| `COUNT(*)` / aggregates       | PASS       | **FAIL**      | native returns the empty-`result` form → count `0` (upstream)        |
+| KV set/get/exists/delete      | PASS       | **FAIL**      | KV read helper shape mismatch (`KeyError "value"`)                    |
+| FTS search / fuzzy            | PASS       | **FAIL**      | `text_match`/`bm25_score` native shape not normalisable client-side  |
+| Vector search                 | PASS       | **ERR**       | vector-search native shape; `distance` absent                        |
+| **Totals (feature_smoke)**    | **21/21**  | **15 / 19**   |                                                                      |
 
 ## Expected
 
@@ -173,18 +175,36 @@ transport.
   document-backed collection over native gets the JSON blob instead of
   the column.
 
-## Adapter workaround
+## Adapter workaround (SHIPPED)
 
-None shipped. The adapter faithfully returns what the native protocol
-sends; `NativePGCompat` is not the cause (pgwire path is unaffected and
-green).
+`NativePGCompat::Result` now normalises the two non-projected native
+document shapes back into real columns (native-only path; pgwire never
+produces these, so it is untouched):
 
-Phase-2 option (real feature, not a quick patch): on native, detect
-document-backed collections (via `DESCRIBE` / collection engine) and
-JSON-expand the `data` blob into the requested logical columns for raw
-`execute` and the engine helpers, mirroring what pgwire does
-server-side. Deferred until the upstream stance is known — a server-side
-fix is the correct layer.
+- **A — `["data","id"]`**: one row per record, `data` = the row as a
+  JSON string, `id` = internal surrogate. Parse each `data`, emit the
+  union of JSON keys as columns.
+- **B — `["result"]`**: a single cell whose value is a JSON array of row
+  objects; `"[]"` for an empty collection. Parse it; an empty array
+  becomes a genuinely empty result (no phantom row → no
+  `MissingAttributeError`), a populated array expands like A.
+
+Effect: model collection reads (`.all` / `.first` / scopes / index
+pages), document_strict spatial round-trips, and schema-tracking scans
+all work over `transport: native`. Verified: sample-app `/articles`
+renders 200 over native; `feature_smoke` native 15/19; pgwire 21/21
+(unaffected); adapter rspec 32/0.
+
+Still **not** client-side fixable (upstream BUG-018, #45):
+
+- `COUNT(*)` / aggregates — native returns the empty-`result` form
+  regardless of row count, so counts read as `0`.
+- FTS (`text_match` / `bm25_score`) and vector search — distinct native
+  result shapes with computed columns that aren't present to reconstruct.
+
+The correct long-term fix is still server-side: native should project
+logical columns like pgwire. Until then the shim covers the common
+document read paths; aggregates/FTS/vector need pgwire.
 
 ## Upstream fix sketch
 
