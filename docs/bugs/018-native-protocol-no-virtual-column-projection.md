@@ -7,6 +7,41 @@ server-side. This is a native-vs-pgwire behavioural divergence in the
 NodeDB server, surfaced by the adapter's `transport: native` option
 (shipped in activerecord-nodedb-adapter 0.1.0.alpha.4, PR #44).
 
+## Schema-tracking impact — native + Rails migrations is BLOCKED (2026-05-16)
+
+`schema_migrations` and `ar_internal_metadata` are `document_strict`
+collections (BUG-016 stores the version/key in the mandatory `id`
+column). Over native, reading them back hits this bug:
+
+```
+INSERT id='001','002' INTO schema_migrations (document_strict)
+SELECT id FROM schema_migrations  ->  columns ["data","id"]
+                                      rows [["{\"id\":\"001\"}","00000003"], …]
+SchemaMigration#versions          ->  ["00000003","00000004"]   # internal
+                                      # surrogates, NOT "001"/"002"
+```
+
+`SchemaMigration#versions` / `InternalMetadata#[]` therefore never
+return the real values, so AR's migrator believes nothing is applied,
+re-runs `001`, and aborts with `collection 'articles' already exists`.
+
+**Net: `db:migrate` / `db:schema:load` do not work over `transport:
+native`.** A separate, narrower defect was fixed along the way
+(`assume_migrated_upto_version` hardcoded `INSERT (version)`, rejected by
+the native strict schema; now routed through the `id` column) — but that
+only removes one layer; the blob-projection gap above is the real gate.
+
+### Practical guidance until upstream parity
+
+- Run `db:migrate` / `bin/setup` over **pgwire** (port 6432); run the
+  app over **native** (6433) for the engines that already pass
+  (connection, document model CRUD, timeseries, graph).
+- Or stay on pgwire end-to-end.
+- Full native parity (incl. migrations) needs either the upstream fix
+  below, or an adapter rework moving schema-tracking off
+  `document_strict` onto an engine that *does* project over native
+  (the `kv` engine projects `["key","value"]` natively — candidate).
+
 ## Summary
 
 For collections whose rows are stored as a document (`document_strict`,
