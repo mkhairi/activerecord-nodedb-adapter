@@ -26,10 +26,18 @@ return the real values, so AR's migrator believes nothing is applied,
 re-runs `001`, and aborts with `collection 'articles' already exists`.
 
 **Net: `db:migrate` / `db:schema:load` do not work over `transport:
-native`.** A separate, narrower defect was fixed along the way
-(`assume_migrated_upto_version` hardcoded `INSERT (version)`, rejected by
-the native strict schema; now routed through the `id` column) — but that
-only removes one layer; the blob-projection gap above is the real gate.
+native`** (BUG-018 blob read-back). A separate, transport-independent
+defect was fixed along the way: AR's `assume_migrated_upto_version`
+hardcodes `INSERT INTO schema_migrations (version) …`, but
+`schema_migrations` is a `document_strict` collection with only an `id`
+field and NodeDB enforces that strict schema on **both pgwire and
+native** — so the `db:schema:load` / `db:prepare` path raised
+`unknown field 'version' not present in strict schema` on pgwire too
+(`bin/setup` sidesteps it via `create_version`→`id`). The adapter now
+always routes version inserts through `SchemaMigration#create_version`
+(`id` column). That removes this layer on both transports; the
+native-only blob-projection gap above is still the gate for native
+migrations.
 
 ### Practical guidance until upstream parity
 

@@ -277,13 +277,14 @@ module ActiveRecord
       # `INSERT INTO schema_migrations (version) …`, bypassing the
       # BUG-016 workaround that stores the version in the NodeDB-mandatory
       # `id` column. `schema_migrations` is a strict collection with only
-      # an `id` field; over the native protocol that strict schema is
-      # enforced and the `version` field is rejected. Route every version
-      # insert through `SchemaMigration#create_version` (which writes
-      # `id`) instead, skipping ones already recorded.
+      # an `id` field, and NodeDB enforces that strict schema on
+      # `document_strict` over BOTH transports — the `version` field is
+      # rejected on pgwire and native alike. (It only surfaces on the
+      # `db:schema:load` / `db:prepare` path: `bin/setup` already routes
+      # through `create_version`.) Always route version inserts through
+      # `SchemaMigration#create_version` (which writes `id`), skipping
+      # ones already recorded.
       def assume_migrated_upto_version(version)
-        return super unless native_transport?
-
         version = version.to_i
         sm = pool.schema_migration
         present = sm.versions.map { |v| v.to_s }
