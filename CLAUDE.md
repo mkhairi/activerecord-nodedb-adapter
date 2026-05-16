@@ -25,8 +25,9 @@ Status: **alpha** (`0.1.0.alpha.N`).
 bundle exec rspec
 ```
 
-Requires a live NodeDB on `localhost:6432`. 13 examples currently;
-must stay 0 failures, 0 pending before any PR merges. New behaviour
+Requires a live NodeDB on `localhost:6432` (and `:6433` for the native
+transport specs). 32 examples currently; must stay 0 failures, 0 pending
+before any PR merges. New behaviour
 requires a spec; new NodeDB workaround requires a spec that asserts
 the workaround's effect (not just "doesn't crash").
 

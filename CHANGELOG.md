@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.4] — 2026-05-16
+
+### Added
+- **Opt-in native transport.** Set `transport: native` in the database
+  config to talk to NodeDB over its binary MessagePack protocol
+  (port 6433, via `nodedb-ruby`'s `NodeDB::Native::Connection`) instead
+  of pgwire/libpq. A `NativePGCompat` shim exposes the slice of the
+  PG::Connection / PG::Result API that Rails 8.1's PostgreSQLAdapter
+  uses, so models, schema, CRUD, transactions and the BUG-008
+  `record.destroy` workaround all work over native. Default transport is
+  unchanged (`:pg`, port 6432) — existing apps and the pgwire suite are
+  untouched.
+
+### Notes
+- On native, pg catalog reflection (`pg_class`/`pg_type`/`pg_index`) is
+  unavailable; schema reflection falls back to NodeDB `DESCRIBE` /
+  `SHOW COLLECTIONS` and model attribute casting is schema-driven (as it
+  already was). Per-result PG OIDs aren't available over native, so ad-hoc
+  SQL values come back as strings — model attributes still cast via the
+  collection schema.
+- Requires `nodedb-ruby >= 0.1.0.alpha.3` (native client).
+
 ## [0.1.0.alpha.3] — 2026-05-15
 
 ### Removed

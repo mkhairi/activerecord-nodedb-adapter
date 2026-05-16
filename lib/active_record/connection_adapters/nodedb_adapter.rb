@@ -8,6 +8,7 @@ require_relative "nodedb/schema_dumper"
 require_relative "nodedb/schema_migration"
 require_relative "nodedb/internal_metadata"
 require_relative "nodedb/connection_pool_patch"
+require_relative "nodedb/native_pg_compat"
 require_relative "nodedb/session_settings"
 require_relative "nodedb/type/vector"
 require_relative "nodedb/type/geometry"
@@ -28,15 +29,20 @@ module ActiveRecord
         :sslmode, :sslcert, :sslkey, :sslrootcert
       )
       conn_params[:dbname] ||= conn_params.delete(:database)
-      # NodeDB pgwire port default: 6432
-      conn_params[:port] ||= 6432
 
-      ConnectionAdapters::NodedbAdapter.new(
-        ConnectionAdapters::NodedbAdapter.new_client(conn_params),
-        logger,
-        conn_params,
-        config
-      )
+      native = config.symbolize_keys[:transport].to_s == "native"
+      # pgwire default 6432; native binary protocol default 6433.
+      conn_params[:port] ||= native ? 6433 : 6432
+      config = config.merge(port: conn_params[:port])
+
+      client =
+        if native
+          ConnectionAdapters::Nodedb::NativePGCompat.connect(conn_params)
+        else
+          ConnectionAdapters::NodedbAdapter.new_client(conn_params)
+        end
+
+      ConnectionAdapters::NodedbAdapter.new(client, logger, conn_params, config)
     end
   end
 
@@ -90,6 +96,14 @@ module ActiveRecord
 
       def get_database_version
         160000
+      end
+
+      # `SHOW max_identifier_length` is not answered over the native
+      # protocol; use PostgreSQL's default so identifier checks pass.
+      def max_identifier_length
+        return 63 if native_transport?
+
+        super
       end
 
       # Suppress the minimum-version check entirely.
@@ -202,7 +216,99 @@ module ActiveRecord
         end
       end
 
+      # AR's data-source existence check queries pg_class, which the
+      # native protocol's SQL engine doesn't expose. Probe with NodeDB's
+      # DESCRIBE instead (cheap; errors when the collection is absent).
+      def data_source_exists?(name)
+        return super unless native_transport?
+
+        query(NodeDB::SQL::Collection.describe(name.to_s), "SCHEMA")
+        true
+      rescue ActiveRecord::StatementInvalid
+        false
+      end
+      alias_method :table_exists?, :data_source_exists?
+
+      # The native protocol's SQL engine exposes no pg_* catalogs, so AR's
+      # catalog-based schema reflection can't run. Provide NodeDB-native
+      # equivalents (DESCRIBE / SHOW COLLECTIONS) or safe empties. Model
+      # attribute casting still works via the overridden column_definitions;
+      # primary key comes from the column list (NodeDB collections are
+      # id-keyed) or the model's explicit self.primary_key.
+      def tables
+        return super unless native_transport?
+
+        collections
+      end
+      alias_method :data_sources, :tables
+
+      def primary_keys(table_name)
+        return super unless native_transport?
+
+        names = columns(table_name.to_s).map(&:name)
+        names.include?("id") ? ["id"] : []
+      end
+
+      def pk_and_sequence_for(_table)
+        return super unless native_transport?
+
+        nil # NodeDB has no sequences
+      end
+
+      def indexes(table_name)
+        return super unless native_transport?
+
+        []
+      end
+
+      def foreign_keys(table_name)
+        return super unless native_transport?
+
+        []
+      end
+
+      def check_constraints(table_name)
+        return super unless native_transport?
+
+        []
+      end
+
+      # True when this connection was configured with `transport: native`
+      # (NodeDB binary protocol instead of pgwire/libpq).
+      def native_transport?
+        @config[:transport].to_s == "native"
+      end
+
       private
+
+      # Reconnect must also go through the native shim, otherwise AR's
+      # connect/reconnect path would PG.connect to the native port.
+      def connect
+        if native_transport?
+          @raw_connection = Nodedb::NativePGCompat.connect(@connection_parameters)
+        else
+          super
+        end
+      rescue ConnectionNotEstablished => ex
+        raise ex.set_pool(@pool)
+      end
+
+      # The native protocol's SQL engine has no pg_type catalog. Both the
+      # decoder fast-path and the additional-OID discovery query it; skip
+      # them on native. Base types are still registered by the static part
+      # of initialize_type_map, and model attribute casting is driven by
+      # the overridden #column_definitions.
+      def add_pg_decoders
+        return if native_transport?
+
+        super
+      end
+
+      def load_additional_types(oids = nil)
+        return if native_transport?
+
+        super
+      end
 
       def column_class
         Nodedb::Column
