@@ -4,7 +4,7 @@ NodeDB-side bugs the adapter has had to dance around. Each entry has a
 matching `<id>-<slug>.md` doc with reproduction, expected behaviour, and
 adapter workaround.
 
-Last refreshed: **2026-05-15** against **NodeDB v0.2.1**.
+Last refreshed: **2026-05-16** against **NodeDB v0.2.1**.
 
 | ID  | Title | Status |
 | --- | ----- | ------ |
@@ -25,6 +25,28 @@ Last refreshed: **2026-05-15** against **NodeDB v0.2.1**.
 | 015 | DROP + CREATE resurrects old rows in retention window | OPEN — sample app reconciles in `bin/setup` |
 | 016 | `document_strict` 2nd INSERT collides on empty `id` when PK on non-`id` column | OPEN — adapter stores user keys in built-in `id` column (PR #24) |
 | 017 | `SHOW server_version` stuck at "NodeDB 0.1.0" | **RESOLVED** in v0.2.1 (upstream PR #114) |
+| 018 | Native protocol returns document-backed rows as a raw `{data,id}` blob (no virtual-column projection); pgwire unaffected | OPEN — `transport: native` only; no adapter workaround yet |
+
+## Transport parity (pgwire vs native) — track each release
+
+`transport: native` (BUG-018 territory) vs the pgwire default. Re-run the
+sample app's `scripts/feature_smoke.rb` over both transports each NodeDB
+release and update the `native` column. Target: full parity.
+
+NodeDB **v0.2.1**, last run **2026-05-16**:
+
+| Engine / area            | pgwire | native | Note |
+| ------------------------ | ------ | ------ | ---- |
+| Connection / `active?`   | PASS   | PASS   | `NativePGCompat` shim |
+| Collections listing      | PASS   | PASS   | |
+| Document CRUD (model)    | PASS   | PASS   | model path unpacks `data` |
+| Timeseries               | PASS   | PASS   | |
+| Graph (traverse/pagerank)| PASS   | PASS   | |
+| KV                       | PASS   | FAIL   | native KV read shape mismatch (`KeyError "value"`) |
+| Spatial roundtrip        | PASS   | FAIL   | BUG-018 — document_strict blob |
+| FTS search / fuzzy       | PASS   | FAIL   | BUG-018 — blob, no `bm25_score` projection |
+| Vector search            | PASS   | ERR    | BUG-018 — blob, `distance` nil |
+| **Totals**               | **21/21** | **14/19** | |
 
 ## Adapter workarounds currently shipped
 
@@ -49,6 +71,11 @@ Last refreshed: **2026-05-15** against **NodeDB v0.2.1**.
 - **009** had no adapter code workaround in the first place — the libpq
   noise filter only covered `INSERT EDGE` / `GRAPH ...`, never plain
   INSERT. Documented for completeness.
+- **018** no workaround shipped — server-side fix is the correct layer
+  (native should project document columns like pgwire). Re-run the
+  transport-parity table each NodeDB release; a phase-2 adapter
+  fallback (JSON-expand `data` on native) is the contingency if upstream
+  declines parity.
 
 When NodeDB upstream fully resolves a bug, update the status above and
 the per-bug doc, then ship the workaround removal as a separate PR
