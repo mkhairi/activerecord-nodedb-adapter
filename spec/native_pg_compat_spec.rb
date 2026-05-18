@@ -54,6 +54,32 @@ RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::NativePGCompat do
     end
   end
 
+  describe "document blob normalisation (BUG-018)" do
+    def result_for(columns:, rows:)
+      native = Class.new do
+        define_method(:run) { |_sql| NodeDB::Native::Result.new(columns:, rows:, rows_affected: 0) }
+      end.new
+      described_class.new(native).async_exec("SELECT 1")
+    end
+
+    it "expands a ['result'] JSON-array-of-objects blob into real columns" do
+      r = result_for(columns: ["result"], rows: [['[{"id":"1","t":"a"},{"id":"2","t":"b"}]']])
+      expect(r.fields).to eq(%w[id t])
+      expect(r.to_a).to eq([{ "id" => "1", "t" => "a" }, { "id" => "2", "t" => "b" }])
+    end
+
+    it "passes a GRAPH TRAVERSE {nodes,edges} 'result' payload through untouched" do
+      payload = '{"nodes":[{"id":"alice","depth":0},{"id":"bob","depth":1}],"edges":[]}'
+      r = result_for(columns: ["result"], rows: [[payload]])
+
+      # Must stay a single `result` cell so NodeDB::Graph#graph_traverse
+      # can JSON-parse and unwrap it. Regression guard for the #49
+      # normalizer eating graph payloads on the native transport.
+      expect(r.fields).to eq(["result"])
+      expect(r.to_a).to eq([{ "result" => payload }])
+    end
+  end
+
   describe "query data path" do
     it "async_exec delegates to native #run" do
       conn.async_exec("SELECT 1")

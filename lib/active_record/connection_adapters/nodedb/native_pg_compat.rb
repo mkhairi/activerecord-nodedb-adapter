@@ -59,6 +59,13 @@ module ActiveRecord
               v = JSON.parse(rows[0][0].to_s) rescue :unparsed
               return [[], []] if v == []
               return rows_from_objects(v) if v.is_a?(Array) && v.all? { |e| e.is_a?(Hash) }
+
+              # GRAPH TRAVERSE / GRAPH ALGO emit a single `result` cell whose
+              # value is a `{"nodes":[...],"edges":[...]}` object — a graph
+              # payload, not a document row. Leave it untouched so
+              # NodeDB::Graph#graph_traverse can fetch and unwrap "result".
+              return nil if v.is_a?(Hash) && (v.key?("nodes") || v.key?("edges"))
+
               return rows_from_objects([v]) if v.is_a?(Hash)
             end
 
