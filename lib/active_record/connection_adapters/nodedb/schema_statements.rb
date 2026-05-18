@@ -5,7 +5,11 @@ module ActiveRecord
     module Nodedb
       module SchemaStatements
         # CREATE COLLECTION — NodeDB's analogue to CREATE TABLE.
-        # engine: :document (default), :timeseries, :kv, :columnar, :spatial, :fts
+        # engine: :document (default), :timeseries, :kv, :columnar,
+        #         :spatial, :document_strict.
+        # `:fts` is accepted for backward compatibility and maps to
+        # :document_strict (NodeDB removed the standalone fts engine —
+        # use create_fts for a collection + fulltext index).
         #
         # Example:
         #   create_collection :articles do |t|
@@ -52,6 +56,41 @@ module ActiveRecord
 
         def create_document_strict(name, **options, &block)
           create_collection(name, engine: :document_strict, **options, &block)
+        end
+
+        # Full-text search. NodeDB removed the `fts` engine; FTS is a
+        # document_strict collection plus a CREATE FULLTEXT INDEX per
+        # searchable column.
+        #
+        #   create_fts :posts, fulltext: [:body] do |t|
+        #     t.column :id, "TEXT PRIMARY KEY"
+        #     t.text :title
+        #     t.text :body
+        #   end
+        #
+        # Emits the collection, then one fulltext index per `fulltext:`
+        # column named "<collection>_<column>_ft".
+        def create_fts(name, fulltext:, **options, &block)
+          create_collection(name, engine: :document_strict, **options, &block)
+          Array(fulltext).each do |col|
+            create_fulltext_index("#{name}_#{col}_ft", on: name, column: col)
+          end
+        end
+
+        def create_fulltext_index(index_name, on:, column:)
+          execute_nodedb(
+            NodeDB::SQL::FTS.create_index(
+              name: index_name.to_s, collection: on.to_s, column: column.to_s
+            )
+          )
+        end
+
+        # NodeDB has no DROP FULLTEXT INDEX; the generic DROP INDEX removes
+        # it. Dropping the parent collection removes its indexes too.
+        def drop_fulltext_index(index_name)
+          execute_nodedb(NodeDB::SQL::FTS.drop_index(index_name.to_s))
+        rescue ActiveRecord::StatementInvalid => e
+          raise unless e.message.include?("does not exist")
         end
 
         # CREATE VECTOR INDEX on a collection column.

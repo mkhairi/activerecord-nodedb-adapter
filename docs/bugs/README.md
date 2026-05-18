@@ -18,10 +18,10 @@ Last refreshed: **2026-05-18** against a post-**v0.2.1** upstream build
 | 007 | `pg_attribute` query returns duplicate `id` row | PARTIAL — adapter falls back to `DESCRIBE` |
 | 008 | DELETE inside transaction silently dropped | **PARTIAL** in v0.2.1 — fixed only when PK column lacks explicit `NOT NULL`; AR DDL still hits the broken path; `exec_delete` workaround still required |
 | 009 | INSERT command tag missing OID slot | **RESOLVED** in v0.2.1 — `INSERT 0 N` form now emitted |
-| 010 | `text_match()` predicate doesn't filter rows | OPEN — adapter filters by `bm25_score` (PR #15) |
+| 010 | `text_match()` predicate doesn't filter rows | **RESOLVED** upstream (2026-05-18 build) — filters server-side; adapter bm25 workaround retired |
 | 011 | Spatial INSERT does not evaluate `ST_GeomFromText` | CHANGED — now hard error (was silent text store); spatial engine still unusable |
 | 012 | Spatial engine drops non-geometry typed columns on INSERT | OBSCURED by 011 (cannot INSERT to test) |
-| 013 | FTS fuzzy mode returns wrapped JSON | OPEN — adapter unwraps in `fts_search` (PR #17) |
+| 013 | FTS fuzzy mode returns wrapped JSON | **RESOLVED** upstream (2026-05-18 build) — flat projection in fuzzy mode; adapter unwrap retired |
 | 014 | `pg_try_advisory_lock` / `pg_advisory_unlock` missing | PARTIAL in v0.2.1 — parsed now, return empty (silent no-op); adapter stubs still required |
 | 015 | DROP + CREATE resurrects old rows in retention window | OPEN — sample app reconciles in `bin/setup` |
 | 016 | `document_strict` 2nd INSERT collides on empty `id` when PK on non-`id` column | OPEN — adapter stores user keys in built-in `id` column (PR #24) |
@@ -57,7 +57,7 @@ Post-**v0.2.1** build (commit `a178aa5b`), last run **2026-05-18**:
 | 003 | `database_version` / `get_database_version` return hardcoded `160000`; `check_version` is a no-op |
 | 007 | `column_definitions` falls back to `DESCRIBE` and de-duplicates the result |
 | 008 | `NodedbAdapter#exec_delete` re-issues DELETE outside any AR-opened transaction (still required on v0.2.1 — fix is conditional, AR's `NOT NULL PRIMARY KEY` DDL hits the broken path) |
-| 010, 013 | `NodeDB::FullTextSearch#fts_search` projects `id, bm25_score`, filters nulls, JSON-unwraps fuzzy rows |
+| ~~010, 013~~ | retired 2026-05-18 — `fts_search` issues `SELECT id … WHERE text_match()`; server filters; no bm25/unwrap |
 | 014 | `NodedbAdapter#get_advisory_lock` / `#release_advisory_lock` no-op pair returning `true` (still needed — upstream returns empty, not boolean) |
 | 016 | `Nodedb::SchemaMigration` / `Nodedb::InternalMetadata` declare PK on the built-in `id` column |
 
@@ -77,6 +77,15 @@ Post-**v0.2.1** build (commit `a178aa5b`), last run **2026-05-18**:
   transport-parity table each NodeDB release; a phase-2 adapter
   fallback (JSON-expand `data` on native) is the contingency if upstream
   declines parity.
+
+- **010 / 013** workarounds **retired** on the 2026-05-18 upstream
+  build: `text_match()` filters server-side and fuzzy mode returns a
+  flat projection. `fts_search` simplified to
+  `SELECT id … WHERE text_match()`; no bm25 projection / null-drop /
+  JSON-unwrap. NodeDB also removed the standalone `fts` engine — FTS is
+  a `document_strict` collection + `CREATE FULLTEXT INDEX`; the adapter
+  ships `create_fts(name, fulltext: […])` and legacy `engine: :fts`
+  maps to `document_strict`.
 
 When NodeDB upstream fully resolves a bug, update the status above and
 the per-bug doc, then ship the workaround removal as a separate PR

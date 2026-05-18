@@ -8,6 +8,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.6] — 2026-05-18
+
+### Added
+- `create_fts(name, fulltext: [...])` migration helper — builds a
+  `document_strict` collection then a `CREATE FULLTEXT INDEX` per
+  `fulltext:` column (named `<collection>_<column>_ft`).
+- `create_fulltext_index(name, on:, column:)` /
+  `drop_fulltext_index(name)` schema statements. Drop emits the generic
+  `DROP INDEX` (NodeDB has no `DROP FULLTEXT INDEX`) and is idempotent.
+
+### Changed
+- **FTS engine removed upstream** (post-`v0.2.1` build, commit
+  `a178aa5b`). `create_collection engine: :fts` now maps to
+  `document_strict` (via `nodedb-ruby` ≥ 0.1.0.alpha.4) instead of
+  emitting an invalid `WITH (engine='fts')`.
+- `nodedb-ruby` dependency floor raised to `>= 0.1.0.alpha.4` (FTS
+  index builders + `:fts`→`document_strict` mapping live there).
+
+### Removed
+- **BUG-010 / BUG-013 workarounds retired.** `text_match()` now filters
+  rows server-side and fuzzy mode returns a flat projection on the
+  2026-05-18 upstream build. `NodeDB::FullTextSearch#fts_search` no
+  longer projects/filters `bm25_score`, no longer JSON-unwraps fuzzy
+  rows, and no longer orders by bm25 (it was `0.0`/`nil` on small
+  corpora). It issues `SELECT id … WHERE text_match()` and returns
+  `[{ "id" => }]` (the `"score"` key is gone — bm25 was never a
+  meaningful relevance signal here).
+
+### Tests
+- New `spec/full_text_search_spec.rb`: `create_fts` builds the
+  collection + index; `text_match` returns only matching rows
+  (BUG-010 regression guard); empty result on no match;
+  `drop_fulltext_index` idempotent. Suite 34 → 38.
+
 ## [0.1.0.alpha.5] — 2026-05-18
 
 ### Fixed
@@ -175,6 +209,7 @@ Initial alpha. Rails ActiveRecord adapter for NodeDB, extending
   return `true`) — BUG-014 workaround.
 - Upstream bug log seeded.
 
+[0.1.0.alpha.6]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.5...v0.1.0.alpha.6
 [0.1.0.alpha.5]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.4...v0.1.0.alpha.5
 [0.1.0.alpha.4]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.3...v0.1.0.alpha.4
 [0.1.0.alpha.3]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.2...v0.1.0.alpha.3
