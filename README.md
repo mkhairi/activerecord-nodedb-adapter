@@ -306,7 +306,9 @@ end
 - Ruby 3.2+
 - Rails 7.1+ (verified on 8.1.3)
 - NodeDB v0.1+ (pgwire on port 6432) — **v0.2.1 recommended** (resolves
-  BUG-004 / BUG-009 / BUG-017 upstream; BUG-008 PARTIAL)
+  BUG-004 / 009 / 010 / 013 / 017 upstream; BUG-008 PARTIAL).
+  The 2026-05-18 build additionally removed the `fts` engine
+  (use `create_fts`)
 
 ## Feature checklist
 
@@ -336,7 +338,7 @@ end
       `FullTextSearch`
 - [x] `record.destroy` workaround for NodeDB BUG-008 (DELETE-in-txn dropped)
 - [x] `Graph.silence_libpq_noise` filter for harmless libpq stderr warnings
-- [x] FTS row normalisation (filters non-matches, unwraps fuzzy-mode JSON)
+- [x] `create_fts(name, fulltext: [...])` — document_strict collection + `CREATE FULLTEXT INDEX` (NodeDB removed the `fts` engine)
 - [x] `drop_collection` rescues missing-collection errors when `if_exists: true`
 - [x] Sample Rails 8 app with full CRUD walkthrough: [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails)
 
@@ -372,6 +374,15 @@ in `docs/bugs/`. Last retested: **2026-05-15** against **NodeDB v0.2.1**.
 - **BUG-017** `SHOW server_version` stuck at `NodeDB 0.1.0` after upstream
   bump — fixed in v0.2.1 via upstream PR #114; wire version now sources
   from `crate::version::VERSION`.
+- **BUG-010** `text_match()` didn't filter rows — fixed on the 2026-05-18
+  build; it now filters server-side. `fts_search` bm25 null-drop
+  workaround retired.
+- **BUG-013** FTS fuzzy returned wrapped JSON — fixed on the 2026-05-18
+  build; fuzzy now returns a flat projection. `fts_search` JSON-unwrap
+  retired.
+- **`fts` engine removed upstream** — FTS is a `document_strict`
+  collection + `CREATE FULLTEXT INDEX`. Use `create_fts(name,
+  fulltext: [...])`; legacy `engine: :fts` maps to `document_strict`.
 
 ### Adapter compensates transparently
 
@@ -387,10 +398,6 @@ You write idiomatic AR; the adapter swallows the workaround:
   explicit `NOT NULL` keyword, but AR's emitted DDL is always
   `"id" text NOT NULL PRIMARY KEY` — so the broken path still applies.
   Workaround stays.
-- **BUG-010** `text_match()` predicate doesn't filter rows — `fts_search`
-  drops rows whose `bm25_score` is null.
-- **BUG-013** FTS fuzzy mode returns single `result` column wrapping JSON
-  — `fts_search` JSON-parses and unwraps.
 - **GRAPH TRAVERSE** returns a single row with a JSON array — `Graph`
   concern parses automatically.
 - **GRAPH INSERT EDGE** now requires `IN 'collection'` — `Graph` concern
