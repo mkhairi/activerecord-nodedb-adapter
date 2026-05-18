@@ -1,5 +1,31 @@
 # BUG-018: native protocol returns document-backed rows as a raw `{data, id}` blob (no virtual-column projection)
 
+## Re-retest 2026-05-18 — newer upstream build (commit `a178aa5b`, still reports v0.2.1)
+
+Rebuilt NodeDB from a post-`v0.2.1` upstream sync (SEARCH alias, JSON
+vector literals, CREATE/DROP INDEX, memory-governor gate removed).
+Re-ran the transport-parity smoke over both transports:
+
+- **Native FTS search + fuzzy now PASS** (were FAIL): the native server
+  now projects the `text_match` / `bm25_score` document columns. Upstream
+  progress — no adapter change needed for FTS.
+- **Native spatial roundtrip still PASS** (held from the shim work).
+- **Native graph traverse REGRESSED then fixed adapter-side.** The newer
+  build returns `GRAPH TRAVERSE` as `result = {"nodes":[...],"edges":[...]}`
+  (an object). The PR #49 blob normaliser's "single Hash → columns"
+  branch promoted that object into `nodes`/`edges` columns, so
+  `NodeDB::Graph#graph_traverse`'s `fetch("result")` missed and returned
+  `[]`. Fixed: graph-shaped `result` payloads (`nodes`/`edges` keys) now
+  pass through untouched so the Graph concern can unwrap them.
+- **KV read still FAIL** (`KeyError "value"`) and **vector search still
+  ERR** (`distance` nil) — unchanged; still the upstream native gap.
+- pgwire unchanged: **21/21**. Native: **14/19 → 17/19**.
+
+Other open bugs rechecked on this build, no change: BUG-002
+(`SELECT version()` → null), BUG-014 (`pg_try_advisory_lock` /
+`pg_advisory_unlock` → null, not boolean), BUG-015 (DROP+CREATE within
+retention still resurrects rows).
+
 ## Status: OPEN (2026-05-16) — NodeDB v0.2.1, **native binary protocol only** (port 6433)
 
 pgwire (port 6432) is **unaffected** — it projects the logical columns
@@ -150,13 +176,13 @@ NodeDB v0.2.1. PASS = functionally equivalent to pgwire. Update the
 | Document CRUD (model)         | PASS       | PASS          | —                                                                    |
 | Doc collection reads (`.all`/`.first`/scopes/index) | PASS | PASS | **fixed**: `NativePGCompat::Result` normalises both native shapes |
 | Timeseries insert/bucket      | PASS       | PASS          | —                                                                    |
-| Graph edge/traverse/algo      | PASS       | PASS          | —                                                                    |
+| Graph edge/traverse/algo      | PASS       | PASS          | **fixed (2026-05-18)**: graph-shaped `{nodes,edges}` `result` now passed through the normaliser untouched |
 | Spatial roundtrip             | PASS       | PASS          | **fixed** by the result normaliser                                   |
 | `COUNT(*)` / aggregates       | PASS       | **FAIL**      | native returns the empty-`result` form → count `0` (upstream)        |
 | KV set/get/exists/delete      | PASS       | **FAIL**      | KV read helper shape mismatch (`KeyError "value"`)                    |
-| FTS search / fuzzy            | PASS       | **FAIL**      | `text_match`/`bm25_score` native shape not normalisable client-side  |
+| FTS search / fuzzy            | PASS       | PASS          | **fixed upstream (2026-05-18 build)**: native now projects `text_match`/`bm25_score` |
 | Vector search                 | PASS       | **ERR**       | vector-search native shape; `distance` absent                        |
-| **Totals (feature_smoke)**    | **21/21**  | **15 / 19**   |                                                                      |
+| **Totals (feature_smoke)**    | **21/21**  | **17 / 19** (newer build, 2026-05-18) |                                          |
 
 ## Expected
 

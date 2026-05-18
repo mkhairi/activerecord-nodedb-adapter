@@ -4,7 +4,8 @@ NodeDB-side bugs the adapter has had to dance around. Each entry has a
 matching `<id>-<slug>.md` doc with reproduction, expected behaviour, and
 adapter workaround.
 
-Last refreshed: **2026-05-16** against **NodeDB v0.2.1**.
+Last refreshed: **2026-05-18** against a post-**v0.2.1** upstream build
+(commit `a178aa5b`; reports `0.2.1`).
 
 | ID  | Title | Status |
 | --- | ----- | ------ |
@@ -33,7 +34,7 @@ Last refreshed: **2026-05-16** against **NodeDB v0.2.1**.
 sample app's `scripts/feature_smoke.rb` over both transports each NodeDB
 release and update the `native` column. Target: full parity.
 
-NodeDB **v0.2.1**, last run **2026-05-16**:
+Post-**v0.2.1** build (commit `a178aa5b`), last run **2026-05-18**:
 
 | Engine / area            | pgwire | native | Note |
 | ------------------------ | ------ | ------ | ---- |
@@ -41,12 +42,12 @@ NodeDB **v0.2.1**, last run **2026-05-16**:
 | Collections listing      | PASS   | PASS   | |
 | Document CRUD (model)    | PASS   | PASS   | model path unpacks `data` |
 | Timeseries               | PASS   | PASS   | |
-| Graph (traverse/pagerank)| PASS   | PASS   | |
+| Graph (traverse/pagerank)| PASS   | PASS   | regressed on this build, **fixed adapter-side** (graph `{nodes,edges}` passthrough) |
+| Spatial roundtrip        | PASS   | PASS   | fixed by result normaliser |
+| FTS search / fuzzy       | PASS   | PASS   | **fixed upstream** on this build (native now projects `bm25_score`) |
 | KV                       | PASS   | FAIL   | native KV read shape mismatch (`KeyError "value"`) |
-| Spatial roundtrip        | PASS   | FAIL   | BUG-018 — document_strict blob |
-| FTS search / fuzzy       | PASS   | FAIL   | BUG-018 — blob, no `bm25_score` projection |
 | Vector search            | PASS   | ERR    | BUG-018 — blob, `distance` nil |
-| **Totals**               | **21/21** | **14/19** | |
+| **Totals**               | **21/21** | **17/19** | |
 
 ## Adapter workarounds currently shipped
 

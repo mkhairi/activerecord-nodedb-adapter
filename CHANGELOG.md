@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.5] — 2026-05-18
+
+### Fixed
+- **Native graph traverse regression.** A post-`v0.2.1` upstream build
+  returns `GRAPH TRAVERSE` as a single `result` cell holding a
+  `{"nodes":[...],"edges":[...]}` object. The PR #49 document-blob
+  normaliser's "single Hash → columns" branch promoted that object into
+  `nodes`/`edges` columns, so `NodeDB::Graph#graph_traverse`'s
+  `fetch("result")` missed and traversal returned `[]` over
+  `transport: native`. Graph-shaped `result` payloads (`nodes`/`edges`
+  keys) now pass through the normaliser untouched. pgwire unaffected.
+
+### Changed
+- BUG-018 doc + transport-parity matrix refreshed against the
+  2026-05-18 upstream build (commit `a178aa5b`): native FTS
+  search/fuzzy now **PASS** (upstream now projects `bm25_score`),
+  native spatial still PASS, graph fixed adapter-side. Native
+  feature_smoke 14/19 → **17/19**; pgwire 21/21. KV read + vector
+  search remain the open native gap. BUG-002 / BUG-014 / BUG-015
+  rechecked, unchanged.
+
+### Tests
+- `native_pg_compat_spec`: cover both `["result"]` shapes — JSON
+  array-of-objects expands to columns; a `{nodes,edges}` graph payload
+  passes through untouched (regression guard). Suite 32 → 34.
+
 ## [0.1.0.alpha.4] — 2026-05-16
 
 ### Added
@@ -149,6 +175,8 @@ Initial alpha. Rails ActiveRecord adapter for NodeDB, extending
   return `true`) — BUG-014 workaround.
 - Upstream bug log seeded.
 
+[0.1.0.alpha.5]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.4...v0.1.0.alpha.5
+[0.1.0.alpha.4]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.3...v0.1.0.alpha.4
 [0.1.0.alpha.3]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.2...v0.1.0.alpha.3
 [0.1.0.alpha.2]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.1...v0.1.0.alpha.2
 [0.1.0.alpha.1]: https://github.com/mkhairi/activerecord-nodedb-adapter/releases/tag/v0.1.0.alpha.1
