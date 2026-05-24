@@ -4,8 +4,8 @@ NodeDB-side bugs the adapter has had to dance around. Each entry has a
 matching `<id>-<slug>.md` doc with reproduction, expected behaviour, and
 adapter workaround.
 
-Last refreshed: **2026-05-18** against a post-**v0.2.1** upstream build
-(commit `a178aa5b`; reports `0.2.1`).
+Last refreshed: **2026-05-24** against a post-**v0.2.1** upstream build
+(commit `2aaec0fd`; reports `0.2.1`).
 
 | ID  | Title | Status |
 | --- | ----- | ------ |
@@ -15,7 +15,7 @@ Last refreshed: **2026-05-18** against a post-**v0.2.1** upstream build
 | 004 | `DROP COLLECTION IF EXISTS` parses `IF` as a name when collection exists | **RESOLVED** in v0.2.1 — adapter now emits `DROP COLLECTION IF EXISTS` directly (workaround retired) |
 | 005 | Prepared statements missing `RowDescription` before `DataRow` | RESOLVED |
 | 006 | Unknown OID `0` for boolean column | RESOLVED |
-| 007 | `pg_attribute` query returns duplicate `id` row | PARTIAL — adapter falls back to `DESCRIBE` |
+| 007 | `pg_attribute` query returns duplicate `id` row | RESHAPED by [BUG-019](019-vquery-pg-catalog-narrow-shapes.md) — vquery refactor changes pg_attribute behaviour; adapter still bypasses via `DESCRIBE` |
 | 008 | DELETE inside transaction silently dropped | **PARTIAL** in v0.2.1 — fixed only when PK column lacks explicit `NOT NULL`; AR DDL still hits the broken path; `exec_delete` workaround still required |
 | 009 | INSERT command tag missing OID slot | **RESOLVED** in v0.2.1 — `INSERT 0 N` form now emitted |
 | 010 | `text_match()` predicate doesn't filter rows | **RESOLVED** upstream (2026-05-18 build) — filters server-side; adapter bm25 workaround retired |
@@ -27,6 +27,7 @@ Last refreshed: **2026-05-18** against a post-**v0.2.1** upstream build
 | 016 | `document_strict` 2nd INSERT collides on empty `id` when PK on non-`id` column | OPEN — adapter stores user keys in built-in `id` column (PR #24) |
 | 017 | `SHOW server_version` stuck at "NodeDB 0.1.0" | **RESOLVED** in v0.2.1 (upstream PR #114) |
 | 018 | Native protocol returns document-backed rows as a raw `{data,id}` blob (no virtual-column projection); pgwire unaffected | OPEN — `transport: native` only; no adapter workaround yet |
+| 019 | vquery pg_catalog evaluator rejects regclass casts, joins, `ANY(current_schemas)` and `pg_type.typelem` (post-`2330063a` 2026-05-23 upstream) | OPEN upstream — adapter bypasses on every transport in `0.1.0.alpha.7` |
 
 ## Transport parity (pgwire vs native) — track each release
 
@@ -34,7 +35,7 @@ Last refreshed: **2026-05-18** against a post-**v0.2.1** upstream build
 sample app's `scripts/feature_smoke.rb` over both transports each NodeDB
 release and update the `native` column. Target: full parity.
 
-Post-**v0.2.1** build (commit `a178aa5b`), last run **2026-05-18**:
+Post-**v0.2.1** build (commit `2aaec0fd`), last run **2026-05-24**:
 
 | Engine / area            | pgwire | native | Note |
 | ------------------------ | ------ | ------ | ---- |
@@ -60,6 +61,7 @@ Post-**v0.2.1** build (commit `a178aa5b`), last run **2026-05-18**:
 | ~~010, 013~~ | retired 2026-05-18 — `fts_search` issues `SELECT id … WHERE text_match()`; server filters; no bm25/unwrap |
 | 014 | `NodedbAdapter#get_advisory_lock` / `#release_advisory_lock` no-op pair returning `true` (still needed — upstream returns empty, not boolean) |
 | 016 | `Nodedb::SchemaMigration` / `Nodedb::InternalMetadata` declare PK on the built-in `id` column |
+| 019 | `load_additional_types` no-op on every transport; `tables`, `primary_keys`, `pk_and_sequence_for`, `indexes`, `foreign_keys`, `check_constraints` use NodeDB-native paths on every transport (vquery refactor extends BUG-018-style gap to pgwire) |
 
 ## Workaround retirement strategy
 
