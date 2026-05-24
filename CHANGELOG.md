@@ -8,6 +8,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.7] — 2026-05-24
+
+### Fixed
+- **BUG-019 — pg_catalog vquery bypass.** NodeDB upstream rewrote the
+  pgwire pg_catalog handlers to go through an in-process `vquery`
+  evaluator (commits `eed703c6` / `2330063a`, 2026-05-23). The
+  evaluator's column set and expression vocabulary are narrower than
+  what AR emits during connection setup and schema reflection — it
+  rejects `::regclass` casts, joins across virtual tables,
+  `ANY(current_schemas(false))` predicates, and references to
+  `pg_type.typelem`. AR closed the broken connection mid-handshake
+  and NodeDB counted the close as an auth failure, masking the root
+  cause as `FATAL: Password authentication failed`. The native-only
+  bypasses already in `NodedbAdapter` (BUG-018 territory) now apply
+  on every transport:
+  - `load_additional_types` — unconditional no-op (was native-only).
+    Base types come from `initialize_type_map`'s static section.
+  - `tables` / `data_sources` — `collections` (SHOW COLLECTIONS) on
+    every transport.
+  - `primary_keys` — `["id"]` when the collection has an `id`
+    column, else `[]`.
+  - `pk_and_sequence_for` — `nil` (NodeDB has no sequences).
+  - `indexes`, `foreign_keys`, `check_constraints` — `[]`.
+  - `add_pg_decoders` keeps the native-only skip — vquery's
+    materialised `pg_type` columns are sufficient for the decoder
+    fast-path.
+
+### Documentation
+- New `docs/bugs/019-vquery-pg-catalog-narrow-shapes.md` capturing the
+  expression shapes the evaluator rejects, the auth-failure masking,
+  the dev-only `max_failed_logins = 0` config workaround for
+  upstream's tightened lockout enforcement (`f9e19d84`), and the
+  retirement criteria.
+- `docs/bugs/README.md` refreshed for the 2026-05-24 build (commit
+  `2aaec0fd`). BUG-007 marked **RESHAPED** by BUG-019 — pg_attribute
+  still goes through the adapter's `DESCRIBE` fallback so the change
+  is transparent to callers.
+
 ## [0.1.0.alpha.6] — 2026-05-18
 
 ### Added
@@ -209,6 +247,7 @@ Initial alpha. Rails ActiveRecord adapter for NodeDB, extending
   return `true`) — BUG-014 workaround.
 - Upstream bug log seeded.
 
+[0.1.0.alpha.7]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.6...v0.1.0.alpha.7
 [0.1.0.alpha.6]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.5...v0.1.0.alpha.6
 [0.1.0.alpha.5]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.4...v0.1.0.alpha.5
 [0.1.0.alpha.4]: https://github.com/mkhairi/activerecord-nodedb-adapter/compare/v0.1.0.alpha.3...v0.1.0.alpha.4

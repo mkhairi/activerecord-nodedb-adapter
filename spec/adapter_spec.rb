@@ -49,6 +49,42 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
     end
   end
 
+  describe "BUG-019 pg_catalog vquery bypass", :integration do
+    let(:name) { "vquery_bypass_#{SecureRandom.hex(4)}" }
+
+    before do
+      conn.create_collection(name, engine: :document_strict) do |t|
+        t.text :id, primary_key: true
+        t.text :title
+      end
+    end
+
+    after { conn.drop_collection(name, if_exists: true) }
+
+    it "tables returns the collection without hitting pg_class" do
+      expect(conn.tables).to include(name)
+    end
+
+    it "primary_keys returns ['id'] without hitting pg_attribute joins" do
+      expect(conn.primary_keys(name)).to eq(["id"])
+    end
+
+    it "indexes / foreign_keys / check_constraints return empty arrays" do
+      expect(conn.indexes(name)).to eq([])
+      expect(conn.foreign_keys(name)).to eq([])
+      expect(conn.check_constraints(name)).to eq([])
+    end
+
+    it "load_additional_types is a no-op (vquery rejects pg_type.typelem)" do
+      expect { conn.send(:load_additional_types, []) }.not_to raise_error
+    end
+
+    it "connection survives configure_connection without hitting typelem" do
+      ActiveRecord::Base.connection.reconnect!
+      expect(conn.execute("SHOW server_version").to_a).not_to be_empty
+    end
+  end
+
   describe "record.destroy under NodeDB BUG-008 (PARTIAL fix in v0.2.1)", :integration do
     let(:name) { "txn_delete_#{SecureRandom.hex(4)}" }
 

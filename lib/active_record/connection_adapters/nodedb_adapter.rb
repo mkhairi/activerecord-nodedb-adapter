@@ -229,47 +229,39 @@ module ActiveRecord
       end
       alias_method :table_exists?, :data_source_exists?
 
-      # The native protocol's SQL engine exposes no pg_* catalogs, so AR's
-      # catalog-based schema reflection can't run. Provide NodeDB-native
-      # equivalents (DESCRIBE / SHOW COLLECTIONS) or safe empties. Model
-      # attribute casting still works via the overridden column_definitions;
-      # primary key comes from the column list (NodeDB collections are
-      # id-keyed) or the model's explicit self.primary_key.
+      # NodeDB's pg_* catalogs run through a virtual-catalog vquery
+      # evaluator (upstream commit 2330063a, post-v0.2.1) that does not
+      # support the expression shapes AR's schema reflection emits
+      # (joins, ANY(current_schemas(false)), ::regclass casts). Native
+      # protocol exposes no pg_* catalogs at all. On every transport,
+      # provide NodeDB-native equivalents (DESCRIBE / SHOW COLLECTIONS)
+      # or safe empties. Model attribute casting still works via the
+      # overridden column_definitions; primary key comes from the column
+      # list (NodeDB collections are id-keyed) or the model's explicit
+      # self.primary_key.
       def tables
-        return super unless native_transport?
-
         collections
       end
       alias_method :data_sources, :tables
 
       def primary_keys(table_name)
-        return super unless native_transport?
-
         names = columns(table_name.to_s).map(&:name)
         names.include?("id") ? ["id"] : []
       end
 
       def pk_and_sequence_for(_table)
-        return super unless native_transport?
-
         nil # NodeDB has no sequences
       end
 
       def indexes(table_name)
-        return super unless native_transport?
-
         []
       end
 
       def foreign_keys(table_name)
-        return super unless native_transport?
-
         []
       end
 
       def check_constraints(table_name)
-        return super unless native_transport?
-
         []
       end
 
@@ -320,21 +312,23 @@ module ActiveRecord
         raise ex.set_pool(@pool)
       end
 
-      # The native protocol's SQL engine has no pg_type catalog. Both the
-      # decoder fast-path and the additional-OID discovery query it; skip
-      # them on native. Base types are still registered by the static part
-      # of initialize_type_map, and model attribute casting is driven by
-      # the overridden #column_definitions.
+      # add_pg_decoders queries pg_type with a column set NodeDB's vquery
+      # evaluator (upstream commit 2330063a, post-v0.2.1) supports, so it
+      # works on pgwire — but native protocol has no pg_type catalog at all.
+      # Keep the native skip; let pgwire call super.
       def add_pg_decoders
         return if native_transport?
 
         super
       end
 
+      # load_additional_types references pg_type columns like `typelem` that
+      # the new vquery evaluator does not expose ("eval: unknown column").
+      # Skip on every transport — base types are registered by
+      # initialize_type_map's static section, and model attribute casting
+      # is driven by the overridden #column_definitions (DESCRIBE).
       def load_additional_types(oids = nil)
-        return if native_transport?
-
-        super
+        # no-op
       end
 
       def column_class

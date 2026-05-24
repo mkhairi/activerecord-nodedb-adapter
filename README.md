@@ -308,7 +308,12 @@ end
 - NodeDB v0.1+ (pgwire on port 6432) — **v0.2.1 recommended** (resolves
   BUG-004 / 009 / 010 / 013 / 017 upstream; BUG-008 PARTIAL).
   The 2026-05-18 build additionally removed the `fts` engine
-  (use `create_fts`)
+  (use `create_fts`). Post-2026-05-23 builds added a vquery
+  pg_catalog evaluator — adapter `0.1.0.alpha.7` bypasses the
+  narrowed pg_catalog shapes on every transport (see BUG-019).
+  Dev environments running the post-`f9e19d84` lockout enforcement
+  may need `[auth] max_failed_logins = 0` in a TOML config until
+  the bypass is wired everywhere AR touches pg_catalog.
 
 ## Feature checklist
 
@@ -403,7 +408,15 @@ You write idiomatic AR; the adapter swallows the workaround:
 - **GRAPH INSERT EDGE** now requires `IN 'collection'` — `Graph` concern
   threads `in_collection:` automatically.
 - **BUG-007** `pg_attribute` query returns duplicate `id` row — adapter
-  uses `DESCRIBE` fallback in `column_definitions`.
+  uses `DESCRIBE` fallback in `column_definitions`. Reshaped by BUG-019
+  (vquery refactor) — adapter behaviour unchanged.
+- **BUG-019** vquery pg_catalog evaluator rejects `::regclass` casts,
+  joins across virtual tables, `ANY(current_schemas(false))`, and
+  `pg_type.typelem`. Adapter routes `tables`, `primary_keys`,
+  `pk_and_sequence_for`, `indexes`, `foreign_keys`,
+  `check_constraints` through NodeDB-native paths (SHOW COLLECTIONS /
+  DESCRIBE / `[]`), and treats `load_additional_types` as a no-op on
+  every transport.
 - **libpq stderr noise** on `INSERT EDGE`, `GRAPH …` command tags —
   `Graph.silence_libpq_noise` block filter.
 - **`SEARCH … USING VECTOR()` rejects quoted identifiers** — `Vector`
