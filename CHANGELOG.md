@@ -8,6 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.8] — 2026-06-07
+
+NodeDB v0.3.0 (commit `25040fdf`) compatibility release. Surfaces the
+new server-side features (persistent graph-stats, operational SHOW
+commands, BITEMPORAL collections) and patches a security finding from
+the background commit review.
+
+Requires `nodedb-ruby >= 0.1.0.alpha.5`.
+
+### Added
+- **`Model.graph_stats(verbose:, as_of:)`** + **`connection.graph_stats(collection:, verbose:, as_of:)`** — surfaces NodeDB v0.3.0's persistent O(1) edge-store counters via `SHOW GRAPH STATS [<collection>] [VERBOSE] [AS OF SYSTEM TIME <ms>]`. Compact form yields one row with `collection`, `node_count`, `edge_count`, `distinct_label_count`, `labels` (JSON-encoded `{label, count}` array); verbose form yields one row per `(collection, label)` pair. The model-level helper currently fetches the tenant-wide form and filters in Ruby on `table_name` (see BUG-020 — scoped form returns zeros upstream). (#55)
+- **Operational SHOW helpers on `NodedbAdapter`**: `show_roles`, `show_stats`, `show_metrics`, `show_memory`, `show_tenant(id_or_name)`, `show_tenants(name_filter)`, plus the superuser-only `set_tenant(value)` (accepts `nil` / `:default` / `"default"` / Integer / String). All return `Array<Hash>` or a single `Hash`. (#58)
+- **`create_collection ..., bitemporal: true`** — passes NodeDB v0.3.0's `BITEMPORAL` modifier through to the column-list parens. Note: v0.3.0's bitemporal SELECT path still emits document rows in the raw `{data,id}` blob shape over both transports (BUG-018 territory) so the AR Relation experience is degraded — documented inline in the method comment. (#60)
+
+### Security
+- **`show_tenant` and `show_tenants` argument validation.** PR #58 interpolated user-supplied String tenant names directly into the SHOW command tail; NodeDB consumes the name as a bare identifier and applies no SQL-string quoting on the parser side, so naive interpolation was a HIGH-severity SQLi vector flagged by the background commit review. Inputs are now matched against `/\A[A-Za-z0-9_][A-Za-z0-9_\-]*\z/` (private `validate_tenant_identifier!`); non-matching strings raise `ArgumentError`. The `Integer` path is unchanged (already safe). (#59)
+
+### Documentation
+- **BUG-020 — `SHOW GRAPH STATS '<collection>'` scoping returns zero counters.** New `docs/bugs/020-show-graph-stats-scoping-zeros.md` capturing repro, expected behaviour, adapter workaround, and retirement criteria; cross-linked from `docs/bugs/README.md`. Tracking issue #57. (#56)
+- **Bug log refreshed to v0.3.0.** `docs/bugs/README.md` header, transport-parity table, and the status / workarounds cells for BUG-008, BUG-014, BUG-019. (#54)
+
+### Bug retest summary (v0.3.0, commit `25040fdf`)
+| Bug | Status | Workaround |
+| --- | ------ | ---------- |
+| 002 / 003 | OPEN | hardcoded version (`160000`) + `SHOW server_version` |
+| 007 | RESHAPED by 019 | `DESCRIBE` bypass |
+| 008 | PARTIAL — psql persists `INT NOT NULL PK` DELETE in txn; AR `document_strict` + text-PK `record.destroy` still no-ops on both pgwire and native | `exec_delete` override **kept** |
+| 011 / 012 | OPEN (hard error on `ST_GeomFromText`) | sample app uses `document_strict` + Ruby haversine |
+| 014 | PARTIAL — advisory locks parsed, still return zero rows (not boolean) | no-op stub pair **kept** |
+| 015 | OPEN — DROP+CREATE retention window still resurrects rows | sample-app `bin/setup` reconcile |
+| 016 | OPEN — even without explicit PK, 2nd INSERT collides on empty `id` (`_rowid` fix does not resolve it) | built-in `id` PK on `SchemaMigration` / `InternalMetadata` **kept** |
+| 018 | OPEN — native KV `KeyError "value"` + vector `TypeError nil` unchanged | no adapter workaround |
+| 019 | OPEN — all four vquery shapes still rejected by the in-process evaluator | unconditional bypass **kept** |
+| 020 (new) | OPEN — `SHOW GRAPH STATS '<col>'` returns zeros | tenant-wide + Ruby filter |
+
+Adapter suite: 56 examples, 0 failures.
+
 ## [0.1.0.alpha.7] — 2026-05-24
 
 ### Fixed
