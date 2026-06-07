@@ -32,6 +32,7 @@ and bitemporal documents.
 | 017 | `SHOW server_version` stuck at "NodeDB 0.1.0" | **RESOLVED** in v0.2.1 (upstream PR #114) |
 | 018 | Native protocol returns document-backed rows as a raw `{data,id}` blob (no virtual-column projection); pgwire unaffected | OPEN — `transport: native` only; no adapter workaround yet |
 | 019 | vquery pg_catalog evaluator rejects regclass casts, joins, `ANY(current_schemas)` and `pg_type.typelem` (post-`2330063a` 2026-05-23 upstream) | OPEN through v0.3.0 — re-probed 2026-06-07 against `25040fdf`; all four shapes still rejected by the in-process evaluator. Adapter bypass retained in `0.1.0.alpha.7+` |
+| 020 | `SHOW GRAPH STATS '<collection>'` returns all-zero counters even when the tenant-wide form proves the collection has edges (v0.3.0 release `25040fdf`) | OPEN through v0.3.0 — adapter's `NodeDB::Graph#graph_stats` falls back to the tenant-wide form + Ruby filter on `table_name` |
 
 ## Transport parity (pgwire vs native) — track each release
 
@@ -66,6 +67,7 @@ release and update the `native` column. Target: full parity.
 | 014 | `NodedbAdapter#get_advisory_lock` / `#release_advisory_lock` no-op pair returning `true` (still needed — upstream returns empty, not boolean) |
 | 016 | `Nodedb::SchemaMigration` / `Nodedb::InternalMetadata` declare PK on the built-in `id` column |
 | 019 | `load_additional_types` no-op on every transport; `tables`, `primary_keys`, `pk_and_sequence_for`, `indexes`, `foreign_keys`, `check_constraints` use NodeDB-native paths on every transport (vquery refactor extends BUG-018-style gap to pgwire) |
+| 020 | `NodeDB::Graph#graph_stats` issues the tenant-wide `SHOW GRAPH STATS` and filters the result set in Ruby by stripping JSON quotes from `row["collection"]` and matching the model's `table_name` |
 
 ## Workaround retirement strategy
 
