@@ -219,10 +219,28 @@ module ActiveRecord
       # Shared internals: run a SHOW command and return Array<Hash>.
       # NodeDB's SHOW commands emit a standard "SELECT N" command tag so
       # libpq is happy; no stderr noise filter needed.
+      #
+      # Native-transport fail-soft (BUG-022): NodeDB v0.3.0's native
+      # protocol routes `SHOW <anything>` through the session-parameter
+      # handler instead of the DDL router, so `SHOW STATS / METRICS /
+      # MEMORY / ROLES` collapse to a single `{"setting" => ""}` row
+      # regardless of what the SHOW command actually meant. Detect that
+      # placeholder shape on native and return an empty array instead,
+      # so callers don't render a misleading "1 row" line. Pgwire is
+      # unaffected (the v0.3.0 fix routed SHOW through the DDL router
+      # before session-parameter fallback on pgwire only).
       def show_command(sql)
-        select_all(sql).to_a
+        rows = select_all(sql).to_a
+        return [] if native_transport? && native_show_placeholder?(rows)
+
+        rows
       end
       private :show_command
+
+      def native_show_placeholder?(rows)
+        rows.length == 1 && rows.first.keys == ["setting"] && rows.first["setting"].to_s.empty?
+      end
+      private :native_show_placeholder?
 
       # Persistent O(1) graph-stats counters (NodeDB v0.3.0+,
       # `SHOW GRAPH STATS`). When `collection` is nil, aggregates across
