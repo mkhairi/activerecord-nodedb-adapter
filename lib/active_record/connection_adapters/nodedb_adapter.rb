@@ -251,21 +251,43 @@ module ActiveRecord
       # Pass an Integer for id lookup, or a String for name lookup. NodeDB
       # v0.3.0 only resolves the default tenant via its numeric id (0); name
       # lookups for the default tenant currently return "not found".
+      #
+      # NodeDB parses the name as a bare identifier — single-quoted SQL
+      # literals are not stripped and become part of the looked-up name.
+      # To keep the interpolation safe, String names must match a strict
+      # identifier pattern; non-matching input raises ArgumentError.
       def show_tenant(id_or_name)
         ref =
           if id_or_name.is_a?(Integer)
             id_or_name.to_s
           else
-            id_or_name.to_s
+            validate_tenant_identifier!(id_or_name.to_s)
           end
         show_command("SHOW TENANT #{ref}").first
       end
 
       # SHOW TENANTS WITH NAME <prefix> — tenants matching a name filter.
-      # NodeDB takes the filter as a bare identifier (no SQL string quoting).
+      # NodeDB takes the filter as a bare identifier (no SQL string quoting),
+      # so the filter must match a strict identifier pattern; non-matching
+      # input raises ArgumentError.
       def show_tenants(name_filter)
-        show_command("SHOW TENANTS WITH NAME #{name_filter}")
+        show_command("SHOW TENANTS WITH NAME #{validate_tenant_identifier!(name_filter.to_s)}")
       end
+
+      # Whitelist for tenant name / filter identifiers passed to SHOW TENANT
+      # and SHOW TENANTS WITH NAME. NodeDB consumes these as bare keywords,
+      # so any user-supplied value is interpolated literally — restrict to
+      # ASCII alnum plus `_` and `-`, leading char alnum or `_`.
+      TENANT_IDENTIFIER_RE = /\A[A-Za-z0-9_][A-Za-z0-9_\-]*\z/
+
+      def validate_tenant_identifier!(name)
+        return name if TENANT_IDENTIFIER_RE.match?(name)
+
+        raise ArgumentError,
+              "tenant identifier #{name.inspect} contains characters outside " \
+              "the safe set [A-Za-z0-9_-] (leading char must be alnum or _)"
+      end
+      private :validate_tenant_identifier!
 
       # SET TENANT = '<name>' | <id> | DEFAULT — superuser-only.
       # Pass nil / :default / "default" for DEFAULT, an Integer for id, or
