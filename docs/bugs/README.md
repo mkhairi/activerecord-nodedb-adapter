@@ -34,6 +34,7 @@ and bitemporal documents.
 | 019 | vquery pg_catalog evaluator rejects regclass casts, joins, `ANY(current_schemas)` and `pg_type.typelem` (post-`2330063a` 2026-05-23 upstream) | OPEN through v0.3.0 — re-probed 2026-06-07 against `25040fdf`; all four shapes still rejected by the in-process evaluator. Adapter bypass retained in `0.1.0.alpha.7+` |
 | 020 | `SHOW GRAPH STATS '<collection>'` returns all-zero counters even when the tenant-wide form proves the collection has edges (v0.3.0 release `25040fdf`) | OPEN through v0.3.0 — adapter's `NodeDB::Graph#graph_stats` falls back to the tenant-wide form + Ruby filter on `table_name` |
 | 021 | Reads against a `BITEMPORAL` collection return zero rows even when prior INSERTs reported success (every form of SELECT, plain / scoped / `AS OF SYSTEM TIME NOW()` / `AS OF SYSTEM TIME <ms>`) | OPEN through v0.3.0 — sample app's `AuditLog` demo exercises the migration only; no adapter workaround possible at the SQL layer |
+| 022 | Native protocol routes `SHOW <command>` (STATS / METRICS / MEMORY / ROLES) through the session-parameter handler instead of the DDL router, so every command returns a single `{"setting" => ""}` placeholder row. Pgwire is unaffected (v0.3.0 routed SHOW through DDL first) | OPEN through v0.3.0 — adapter `0.1.0.alpha.9+` detects the placeholder shape on native and returns `[]` instead |
 
 ## Transport parity (pgwire vs native) — track each release
 
