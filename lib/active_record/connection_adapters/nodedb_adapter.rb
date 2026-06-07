@@ -216,6 +216,14 @@ module ActiveRecord
         end
       end
 
+      # Shared internals: run a SHOW command and return Array<Hash>.
+      # NodeDB's SHOW commands emit a standard "SELECT N" command tag so
+      # libpq is happy; no stderr noise filter needed.
+      def show_command(sql)
+        select_all(sql).to_a
+      end
+      private :show_command
+
       # Persistent O(1) graph-stats counters (NodeDB v0.3.0+,
       # `SHOW GRAPH STATS`). When `collection` is nil, aggregates across
       # every graph collection in the tenant. Pass a pre-quoted string
@@ -224,6 +232,54 @@ module ActiveRecord
         sql = NodeDB::SQL::Graph.stats(collection: collection, verbose: verbose, as_of: as_of)
         rows = NodeDB::Graph.silence_libpq_noise { select_all(sql) }
         rows.to_a
+      end
+
+      # NodeDB v0.3.0 operational SHOW commands. Pass-through helpers that
+      # return Array<Hash>. See the upstream docs for column semantics;
+      # the adapter doesn't synthesise or rename columns.
+      #
+      #   SHOW ROLES   — defined roles (name, tenant_id, parent, created_at)
+      #   SHOW STATS   — high-level server counters
+      #   SHOW METRICS — extended counters (Prometheus-style)
+      #   SHOW MEMORY  — per-engine memory budget snapshot
+      def show_roles;   show_command("SHOW ROLES");   end
+      def show_stats;   show_command("SHOW STATS");   end
+      def show_metrics; show_command("SHOW METRICS"); end
+      def show_memory;  show_command("SHOW MEMORY");  end
+
+      # SHOW TENANT <id|name> — single tenant snapshot. Returns Hash row or nil.
+      # Pass an Integer for id lookup, or a String for name lookup. NodeDB
+      # v0.3.0 only resolves the default tenant via its numeric id (0); name
+      # lookups for the default tenant currently return "not found".
+      def show_tenant(id_or_name)
+        ref =
+          if id_or_name.is_a?(Integer)
+            id_or_name.to_s
+          else
+            id_or_name.to_s
+          end
+        show_command("SHOW TENANT #{ref}").first
+      end
+
+      # SHOW TENANTS WITH NAME <prefix> — tenants matching a name filter.
+      # NodeDB takes the filter as a bare identifier (no SQL string quoting).
+      def show_tenants(name_filter)
+        show_command("SHOW TENANTS WITH NAME #{name_filter}")
+      end
+
+      # SET TENANT = '<name>' | <id> | DEFAULT — superuser-only.
+      # Pass nil / :default / "default" for DEFAULT, an Integer for id, or
+      # any other String for name. Returns nil; raises StatementInvalid on
+      # an unknown tenant or insufficient privilege.
+      def set_tenant(value)
+        sql =
+          case value
+          when nil, :default, "default" then "SET TENANT = DEFAULT"
+          when Integer                  then "SET TENANT = #{value}"
+          else                               "SET TENANT = #{quote(value.to_s)}"
+          end
+        execute(sql)
+        nil
       end
 
       # AR's data-source existence check queries pg_class, which the
