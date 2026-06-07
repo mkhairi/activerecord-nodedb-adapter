@@ -54,6 +54,22 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter, :integration do
       expect { conn.show_tenants("nonexistent_xyz_filter") }
         .to raise_error(ActiveRecord::StatementInvalid, /not found/)
     end
+
+    it "rejects filters with characters outside the safe identifier set" do
+      expect { conn.show_tenants("evil'; DROP COLLECTION articles --") }
+        .to raise_error(ArgumentError, /outside the safe set/)
+    end
+  end
+
+  describe "#show_tenant" do
+    it "rejects String names with characters outside the safe identifier set" do
+      expect { conn.show_tenant("evil; DROP COLLECTION articles") }
+        .to raise_error(ArgumentError, /outside the safe set/)
+    end
+
+    it "rejects empty strings" do
+      expect { conn.show_tenant("") }.to raise_error(ArgumentError)
+    end
   end
 
   describe "#set_tenant" do
