@@ -2,7 +2,7 @@
 
 > ## ⚠️ ALPHA — DO NOT USE IN PRODUCTION
 >
-> Version: **`0.1.0.alpha.3`**.
+> Version: **`0.1.0.alpha.8`**. Tracks NodeDB **v0.3.0** (commit `25040fdf`, 2026-06-07). Requires `nodedb-ruby >= 0.1.0.alpha.5`.
 >
 > This adapter is **experimental and unaudited**. It has **never been used or
 > tested in any production environment**. The migration DSL, model concerns,
@@ -38,13 +38,14 @@ handling and SQL building.
 | Area              | State |
 | ----------------- | ----- |
 | AR base adapter   | Working — extends PostgreSQLAdapter, simple-query mode |
-| Migration DSL     | Working — `create_collection`, `create_vector_index`, `drop_collection` |
-| Model concerns    | Vector, Graph, Timeseries, Spatial, KV, FTS |
-| Test suite        | 13 examples / 0 failures / 0 pending |
+| Migration DSL     | Working — `create_collection` (with `bitemporal:` flag on v0.3.0+), `create_vector_index`, `drop_collection` |
+| Model concerns    | Vector, Graph (with `graph_stats` on v0.3.0+), Timeseries, Spatial, KV, FTS |
+| Ops surface       | `show_stats` / `show_metrics` / `show_memory` / `show_roles` / `show_tenant` / `show_tenants` / `set_tenant` (v0.3.0+) |
+| Test suite        | 56 examples / 0 failures / 0 pending |
 | Rails versions    | 7.1+, 8.x verified |
 | Ruby versions     | 3.2+ (developed on 4.0.1) |
-| NodeDB versions   | 0.1.x, 0.2.0, **0.2.1** (latest retest 2026-05-15 — see *Known issues*) |
-| Sample app        | [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails) (Rails 8.1, full CRUD demo across every NodeDB engine) |
+| NodeDB versions   | 0.1.x, 0.2.0, 0.2.1, **0.3.0** (latest retest 2026-06-07 — see *Known issues*) |
+| Sample app        | [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails) (Rails 8.1, full CRUD demo across every NodeDB engine + ops dashboard + personalized PageRank + bitemporal AuditLog) |
 
 ## Installation
 
@@ -305,15 +306,21 @@ end
 
 - Ruby 3.2+
 - Rails 7.1+ (verified on 8.1.3)
-- NodeDB v0.1+ (pgwire on port 6432) — **v0.2.1 recommended** (resolves
-  BUG-004 / 009 / 010 / 013 / 017 upstream; BUG-008 PARTIAL).
-  The 2026-05-18 build additionally removed the `fts` engine
-  (use `create_fts`). Post-2026-05-23 builds added a vquery
-  pg_catalog evaluator — adapter `0.1.0.alpha.7` bypasses the
-  narrowed pg_catalog shapes on every transport (see BUG-019).
-  Dev environments running the post-`f9e19d84` lockout enforcement
-  may need `[auth] max_failed_logins = 0` in a TOML config until
-  the bypass is wired everywhere AR touches pg_catalog.
+- NodeDB v0.1+ (pgwire on port 6432) — **v0.3.0 recommended**.
+  Bundles `SHOW GRAPH STATS`, personalized PageRank, the
+  `BITEMPORAL` collection modifier, an in-process pg_catalog
+  evaluator (still narrow — see BUG-019), and the operational
+  `SHOW ROLES / STATS / METRICS / MEMORY / TENANT` surface.
+  - 2026-05-18 build: `fts` engine removed (use `create_fts`).
+  - Post-2026-05-23 builds added a vquery pg_catalog evaluator
+    that rejects four of the shapes AR's connection handshake
+    needs. Adapter `0.1.0.alpha.7+` bypasses every affected catalog
+    query on every transport (see BUG-019).
+  - Dev environments running the post-`f9e19d84` lockout enforcement
+    need `[auth] max_failed_logins = 0` in a TOML config; without it,
+    the auth lockout state (persistent across daemon restart in
+    `_system.lockout_state`) trips on routine probe sequences and
+    surfaces as `FATAL: Password authentication failed`.
 
 ## Feature checklist
 
@@ -345,6 +352,10 @@ end
 - [x] `Graph.silence_libpq_noise` filter for harmless libpq stderr warnings
 - [x] `create_fts(name, fulltext: [...])` — document_strict collection + `CREATE FULLTEXT INDEX` (NodeDB removed the `fts` engine)
 - [x] `drop_collection` rescues missing-collection errors when `if_exists: true`
+- [x] `create_collection ..., bitemporal: true` — NodeDB v0.3.0 `BITEMPORAL` collection modifier (writes work; reads currently blocked by upstream BUG-021)
+- [x] `Model.graph_stats(verbose:, as_of:)` + `connection.graph_stats(collection:, verbose:, as_of:)` — NodeDB v0.3.0 `SHOW GRAPH STATS` with the upstream-scoping-bug Ruby fallback (see BUG-020)
+- [x] `Graph#graph_algo(:pagerank, personalization: {...})` — NodeDB v0.3.0 personalized PageRank with Hash → JSON encoding (via nodedb-ruby `SQL::Graph.algo`)
+- [x] `connection.show_stats / show_metrics / show_memory / show_roles / show_tenant / show_tenants / set_tenant` — operational SHOW surface; tenant identifier args validated through a strict allowlist to avoid SQL-injection through the bare-identifier interpolation
 - [x] Sample Rails 8 app with full CRUD walkthrough: [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails)
 
 ### Pending
@@ -361,7 +372,8 @@ end
 ## Known issues
 
 NodeDB-side parser quirks and limits, grouped by status. Each is tracked
-in `docs/bugs/`. Last retested: **2026-05-15** against **NodeDB v0.2.1**.
+in `docs/bugs/`. Last retested: **2026-06-07** against **NodeDB v0.3.0**
+(commit `25040fdf`).
 
 ### Resolved upstream
 
@@ -444,35 +456,64 @@ declaration:
   triggers a duplicate-empty-id collision on the second INSERT. Sample
   workaround: store the lookup key in `id` directly.
 
-### Open / limited workaround
+### Open / limited workaround (v0.3.0 retest 2026-06-07)
 
 - **BUG-002** `SELECT version()` returns empty — adapter uses
   `SHOW server_version` instead.
 - **BUG-003** `PQserverVersion()` raises `PG::ConnectionBad` — adapter
   hardcodes `160000` for `database_version` / `get_database_version`.
-- **BUG-011** Spatial INSERT with `ST_GeomFromText` — v0.2.1 changed
-  behaviour from silent text-store to a hard
-  `unsupported: value expression: ST_GeomFromText(...)` error. Better
-  diagnostics, but spatial engine still unusable for real coordinate
-  work. Sample app uses `document_strict` with explicit
-  `lat FLOAT, lon FLOAT` columns and computes haversine in Ruby.
+- **BUG-008** DELETE-in-txn — v0.3.0 psql probe with
+  `INT NOT NULL PRIMARY KEY` persists the DELETE inside `BEGIN/COMMIT`,
+  but AR's `record.destroy` against a `document_strict` collection with
+  a text PK still no-ops on both pgwire and native. The `exec_delete`
+  override stays until upstream lands the document_strict + text-PK
+  path too.
+- **BUG-011** Spatial INSERT with `ST_GeomFromText` — hard parse error
+  (`unsupported: value expression: ST_GeomFromText(...)`). Spatial
+  engine still unusable for real coordinate work. Sample app uses
+  `document_strict` with explicit `lat FLOAT, lon FLOAT` columns and
+  computes haversine in Ruby.
 - **BUG-012** Spatial engine drops non-geometry typed columns silently
   on INSERT. Combined with BUG-011, no working storage path exists in
   the spatial engine today.
-- **BUG-014** `pg_try_advisory_lock` / `pg_advisory_unlock` — v0.2.1
-  partially fixed: parser now recognises the functions, but they return
-  empty rows instead of booleans. Adapter `get_advisory_lock` /
-  `release_advisory_lock` no-op stubs still required.
-- **DROP+CREATE preserves rows within retention window** (BUG-015).
-  NodeDB soft-deletes the storage; a fresh `CREATE COLLECTION` of the
-  same name resurrects the old rows. Use `UNDROP COLLECTION name` then
-  `DELETE FROM name` to clear, or wait for the retention window to
-  expire. `bin/setup` in the sample app reconciles this for
+- **BUG-014** `pg_try_advisory_lock` / `pg_advisory_unlock` — v0.3.0
+  parser recognises the functions but they return empty rows instead
+  of booleans. Adapter `get_advisory_lock` / `release_advisory_lock`
+  no-op stubs still required.
+- **BUG-015** DROP+CREATE in the retention window resurrects rows from
+  the prior incarnation of the collection. Use `UNDROP COLLECTION name`
+  then `DELETE FROM name` to clear, or wait for the retention window
+  to expire. `bin/setup` in the sample app reconciles this for
   `schema_migrations` automatically.
 - **BUG-016** `document_strict` 2nd INSERT collides on empty `id` when
-  primary key is on a non-`id` column. Adapter stores user keys in the
-  built-in `id` column for `schema_migrations` / `ar_internal_metadata`
-  to sidestep this.
+  primary key is on a non-`id` column. v0.3.0's `_rowid` surrogate fix
+  does **not** resolve this — bug reproduces with and without explicit
+  PK. Adapter stores user keys in the built-in `id` column for
+  `schema_migrations` / `ar_internal_metadata` to sidestep this.
+- **BUG-018** Native transport returns document-backed rows as raw
+  `{data,id}` blobs. Document model unwraps client-side; KV reads fail
+  with `KeyError "value"`; vector search fails with
+  `TypeError: no implicit conversion of nil into String`.
+  Sample app `feature_smoke.rb` is 17/19 over native, 21/21 over pgwire.
+- **BUG-019** vquery pg_catalog evaluator rejects `::regclass` casts,
+  joins across virtual tables, `ANY(current_schemas(false))`, and
+  `pg_type.typelem`. Adapter routes `tables`, `primary_keys`,
+  `pk_and_sequence_for`, `indexes`, `foreign_keys`,
+  `check_constraints` through NodeDB-native paths (SHOW COLLECTIONS /
+  DESCRIBE / `[]`), and treats `load_additional_types` as a no-op on
+  every transport. v0.3.0's in-process pg_catalog evaluator does
+  not cover any of the four shapes AR needs.
+- **BUG-020** `SHOW GRAPH STATS '<collection>'` returns all-zero
+  counters even when the tenant-wide form proves the collection has
+  edges. `Model.graph_stats` falls back to the tenant-wide form and
+  filters in Ruby on `table_name`. `connection.graph_stats` issues
+  the SQL verbatim — callers can use it to reproduce the upstream bug.
+- **BUG-021** `BITEMPORAL` collections accept INSERTs but every SELECT
+  shape (plain, scoped, `AS OF SYSTEM TIME NOW()`,
+  `AS OF SYSTEM TIME <ms>`) returns zero rows. The
+  `create_collection ..., bitemporal: true` DDL surface ships in
+  `0.1.0.alpha.8` so migrations are ready when upstream lands the
+  read path; today bitemporal collections are effectively write-only.
 
 ## License
 
