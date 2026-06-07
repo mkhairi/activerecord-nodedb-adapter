@@ -11,13 +11,29 @@ module ActiveRecord
         # :document_strict (NodeDB removed the standalone fts engine —
         # use create_fts for a collection + fulltext index).
         #
+        # `bitemporal: true` adds NodeDB v0.3.0's BITEMPORAL modifier to
+        # the column-list parens. The collection then tracks valid-time
+        # and system-time intervals; query the live version with the
+        # default SELECT or a historical view with
+        # `SELECT ... AS OF SYSTEM TIME <ms>`. Note: v0.3.0's bitemporal
+        # SELECT path still emits document rows in the raw `{data,id}`
+        # blob shape (BUG-018 territory) over both pgwire and native, so
+        # the AR Relation experience is currently degraded — use it
+        # behind a Ruby unwrap or wait for upstream to land virtual-column
+        # projection on bitemporal collections.
+        #
         # Example:
         #   create_collection :articles do |t|
         #     t.text :title
         #     t.vector :embedding, dim: 384
         #     t.timestamps
         #   end
-        def create_collection(collection_name, engine: nil, engine_options: {}, **options, &block)
+        #
+        #   create_collection :orders, engine: :document_strict, bitemporal: true do |t|
+        #     t.text :sku, primary_key: true
+        #     t.numeric :total
+        #   end
+        def create_collection(collection_name, engine: nil, engine_options: {}, bitemporal: false, **options, &block)
           td = create_table_definition(collection_name.to_s, **options)
           td.instance_variable_set(:@engine, engine)
           block.call(td) if block
@@ -27,7 +43,8 @@ module ActiveRecord
             collection_name.to_s,
             engine:         engine,
             columns:        col_strings,
-            engine_options: engine_options
+            engine_options: engine_options,
+            flags:          bitemporal ? [:bitemporal] : []
           )
           execute_nodedb(sql)
         end
