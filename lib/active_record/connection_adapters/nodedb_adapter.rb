@@ -216,6 +216,16 @@ module ActiveRecord
         end
       end
 
+      # Persistent O(1) graph-stats counters (NodeDB v0.3.0+,
+      # `SHOW GRAPH STATS`). When `collection` is nil, aggregates across
+      # every graph collection in the tenant. Pass a pre-quoted string
+      # literal as `collection` to scope to one (`connection.quote(name)`).
+      def graph_stats(collection: nil, verbose: false, as_of: nil)
+        sql = NodeDB::SQL::Graph.stats(collection: collection, verbose: verbose, as_of: as_of)
+        rows = NodeDB::Graph.silence_libpq_noise { select_all(sql) }
+        rows.to_a
+      end
+
       # AR's data-source existence check queries pg_class, which the
       # native protocol's SQL engine doesn't expose. Probe with NodeDB's
       # DESCRIBE instead (cheap; errors when the collection is absent).
