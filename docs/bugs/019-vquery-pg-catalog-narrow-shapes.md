@@ -2,9 +2,17 @@
 
 ## Status
 
-OPEN upstream — retested 2026-05-24 against commit `2aaec0fd` (still
-reports `0.2.1`). Adapter ships unconditional bypass in
-`0.1.0.alpha.7`.
+OPEN upstream — retested 2026-06-07 against the **v0.3.0** release
+(commit `25040fdf`; `SHOW server_version` reports `NodeDB 0.3.0`). The
+0.3.0 changelog announces an in-process pg_catalog evaluator, but it
+does not extend to any of the four expression shapes the AR adapter
+needs: all four still error with
+`virtual table query: unsupported on virtual catalog tables` /
+`eval: unknown column`. Adapter ships unconditional bypass in
+`0.1.0.alpha.7+`.
+
+Prior retest: 2026-05-24 against commit `2aaec0fd` (still reported
+`0.2.1`).
 
 ## Summary
 
