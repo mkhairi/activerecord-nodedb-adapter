@@ -83,4 +83,15 @@ RSpec.describe "ActiveRecord over transport: native", :integration do
     # document_strict stores the row as a JSON `data` blob (same over pgwire).
     expect(rows.rows.flatten.join).to include("delta")
   end
+
+  # BUG-022 — NodeDB v0.3.0 native protocol routes SHOW STATS / METRICS /
+  # MEMORY / ROLES through the session-parameter handler instead of the
+  # DDL router, so each comes back as a placeholder
+  # `{"setting" => ""}` row. The adapter detects that shape and returns
+  # [] so callers don't render misleading single-row "results".
+  %i[show_stats show_metrics show_memory show_roles].each do |op|
+    it "returns [] for #{op} over native (BUG-022 fail-soft)" do
+      expect(conn.public_send(op)).to eq([])
+    end
+  end
 end
