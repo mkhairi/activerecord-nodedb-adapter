@@ -37,4 +37,22 @@ RSpec.describe NodeDB::Graph, :integration do
     result = TestSocial.graph_algo(:pagerank, damping: 0.85, iterations: 10, tolerance: 1e-4)
     expect(result.length).to be > 0
   end
+
+  it "reports persistent edge-store counters via #graph_stats" do
+    rows = TestSocial.graph_stats
+
+    expect(rows.length).to eq(1)
+    row = rows.first
+    expect(row["edge_count"].to_i).to eq(2)
+    expect(row["distinct_label_count"].to_i).to eq(1)
+    expect(row["labels"].to_s).to include("knows")
+  end
+
+  it "exposes the per-label breakdown via #graph_stats verbose form" do
+    rows = TestSocial.graph_stats(verbose: true)
+
+    knows = rows.find { |r| r["label"].to_s == "knows" }
+    expect(knows).not_to be_nil
+    expect(knows["edge_count"].to_i).to eq(2)
+  end
 end

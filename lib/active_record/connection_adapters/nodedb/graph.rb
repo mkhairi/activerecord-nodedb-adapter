@@ -66,6 +66,33 @@ module NodeDB
         )
         NodeDB::Graph.silence_libpq_noise { connection.execute(sql) }
       end
+
+      # Persistent O(1) edge-store counters for this collection
+      # (NodeDB v0.3.0+, `SHOW GRAPH STATS`). Returns an Array of Hash rows
+      # scoped to this model's `table_name`.
+      #
+      # The compact form (`verbose: false`, default) yields one row with
+      # columns `collection`, `node_count`, `edge_count`,
+      # `distinct_label_count`, and `labels` (a JSON-encoded array of
+      # `{label, count}`). The verbose form yields one row per label
+      # with columns `collection`, `label`, `edge_count`.
+      # `as_of` is a millisecond timestamp.
+      #
+      # NodeDB v0.3.0's `SHOW GRAPH STATS '<collection>'` form returns
+      # all-zero counters (upstream bug — scoping does not reach the
+      # stored counters), so the helper fetches the tenant-wide form and
+      # filters in Ruby. Once the upstream scoping bug is fixed, this can
+      # delegate to `connection.graph_stats(collection: …)`.
+      #
+      #   SocialNode.graph_stats
+      #   SocialNode.graph_stats(verbose: true)
+      #   SocialNode.graph_stats(as_of: 1.hour.ago.to_i * 1000)
+      def graph_stats(verbose: false, as_of: nil)
+        wanted = table_name.to_s
+        connection
+          .graph_stats(verbose: verbose, as_of: as_of)
+          .select { |row| row["collection"].to_s.delete('"') == wanted }
+      end
     end
 
     # Redirect fd 2 to a pipe, run the block, then re-emit any captured
