@@ -37,6 +37,15 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
       expect(conn.collections).not_to include(name)
     end
 
+    it "creates a BITEMPORAL document_strict collection (NodeDB v0.3.0+)" do
+      conn.create_collection(name, engine: :document_strict, bitemporal: true) do |t|
+        t.text :id, primary_key: true
+        t.text :title
+      end
+
+      expect(conn.collections).to include(name)
+    end
+
     it "drop_collection(if_exists: true) is a no-op when collection is missing" do
       expect { conn.drop_collection("nope_#{SecureRandom.hex(4)}", if_exists: true) }
         .not_to raise_error
