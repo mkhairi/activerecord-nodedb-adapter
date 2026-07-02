@@ -1,6 +1,44 @@
 # BUG-008: DELETE inside transaction silently dropped on COMMIT
 
-## Status: PARTIAL — NodeDB v0.2.1 (re-retested 2026-05-15)
+## Status: RESHAPED (retested 2026-07-02 against upstream `3a06321e`)
+
+The bug changed form. On the current build the transactional DELETE
+**does persist** — full scans show the row gone for every PK form
+(implicit, explicit `NOT NULL`, TEXT and INT). What remains is a
+**stale primary-key point-lookup phantom**:
+
+```sql
+CREATE COLLECTION p1 (id TEXT NOT NULL PRIMARY KEY, v TEXT) ENGINE = document_strict;
+INSERT INTO p1 (id, v) VALUES ('x', 'first');
+BEGIN; DELETE FROM p1 WHERE id = 'x'; COMMIT;
+
+SELECT id, v FROM p1;                -- (0 rows)   scan: deleted
+SELECT id, v FROM p1 WHERE id='x';   -- x | first  point-lookup: PHANTOM
+```
+
+The phantom persists until the key is re-inserted (which succeeds
+without a duplicate-key error and heals the lookup). Autocommit DELETE
+is clean on both paths. Tell: in-txn DELETE returns a bare `OK`
+command tag; autocommit returns `DELETE 1`.
+
+Earlier retests (including 2026-07-02 morning) used
+`SELECT ... WHERE id = ...` as the post-delete probe and read the
+phantom as "row still present" — the old "DELETE silently dropped"
+description is outdated, and the `NOT NULL`-conditional distinction is
+gone.
+
+**Adapter `exec_delete` workaround stays**: re-issuing the DELETE
+outside the transaction takes the clean autocommit path, so AR
+`record.destroy` followed by `find(id)` sees no phantom.
+
+## Upstream tracking
+
+Filed 2026-07-02 as NodeDB-Lab/nodedb#148 (stale PK point-lookup
+after committed transactional DELETE).
+
+## Earlier history
+
+### PARTIAL — NodeDB v0.2.1 (re-retested 2026-05-15)
 
 Fix is **conditional on collection schema**:
 

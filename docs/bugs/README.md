@@ -20,7 +20,7 @@ type) — old data dirs make the daemon panic on boot; start fresh.
 | 005 | Prepared statements missing `RowDescription` before `DataRow` | RESOLVED |
 | 006 | Unknown OID `0` for boolean column | RESOLVED |
 | 007 | `pg_attribute` query returns duplicate `id` row | RESHAPED by [BUG-019](019-vquery-pg-catalog-narrow-shapes.md) — vquery refactor changes pg_attribute behaviour; adapter still bypasses via `DESCRIBE` |
-| 008 | DELETE inside transaction silently dropped | **PARTIAL** through v0.3.0 — psql probe with `INT NOT NULL PRIMARY KEY` persists DELETE in txn on `25040fdf`, but AR's `record.destroy` path on `document_strict` with text PK still no-ops on both pgwire and native; `exec_delete` workaround still required |
+| 008 | DELETE inside transaction silently dropped | **RESHAPED** on `3a06321e` — txn DELETE now persists (scans clean, all PK forms), but the PK point-lookup serves a phantom of the deleted row until the key is re-inserted. Filed upstream as NodeDB-Lab/nodedb#148. `exec_delete` workaround stays (autocommit re-issue avoids the phantom) |
 | 009 | INSERT command tag missing OID slot | **RESOLVED** in v0.2.1 — `INSERT 0 N` form now emitted |
 | 010 | `text_match()` predicate doesn't filter rows | **RESOLVED** upstream (2026-05-18 build) — filters server-side; adapter bm25 workaround retired |
 | 011 | Spatial INSERT does not evaluate `ST_GeomFromText` | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#141) — constructors evaluate, GeoJSON round-trips; read-side `ST_AsText`/`ST_X`/`ST_DWithin` still broken (separate issue) |
