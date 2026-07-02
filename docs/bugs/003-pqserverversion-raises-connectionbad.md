@@ -19,6 +19,20 @@ conn.parameter_status("server_version")      # => "NodeDB 0.3.0"
 conn.parameter_status("server_version_num")  # => "150000"
 ```
 
+Client-agnostic confirmation with stock psql 18.4 (Debian, libpq 18,
+`postgres:18` Docker image): psql's built-in variables — populated
+directly from `PQserverVersion()` — show the parse failure without any
+Ruby in the loop:
+
+```
+$ psql -h 127.0.0.1 -p 6432 -U nodedb -d nodedb \
+    -c '\echo SERVER_VERSION_NUM=:SERVER_VERSION_NUM SERVER_VERSION_NAME=:SERVER_VERSION_NAME'
+SERVER_VERSION_NUM=0 SERVER_VERSION_NAME=NodeDB 0.3.0
+```
+
+psql itself degrades gracefully on 0 (queries work; version-gated
+features may misbehave); the Ruby pg gem raises on 0. Same root cause.
+
 Upstream fix needed: send a numeric-parseable `server_version`
 ParameterStatus — e.g. `15.0 (NodeDB 0.3.0)`; libpq parses the leading
 digits and ignores the trailing parenthetical, exactly how it handles
