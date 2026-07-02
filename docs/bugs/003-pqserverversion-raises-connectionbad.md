@@ -2,9 +2,10 @@
 
 ## Status: OPEN (retested 2026-07-02 against upstream `3a06321e`)
 
-Still reproduces, root cause now narrowed. Upstream's #142 fix added
-`server_version_num` to the startup ParameterStatus burst (verified:
-`conn.parameter_status("server_version_num")` returns `"150000"`), but
+Still reproduces, root cause now narrowed. The current upstream build
+advertises `server_version_num` in the startup ParameterStatus burst
+(verified: `conn.parameter_status("server_version_num")` returns
+`"150000"`), but
 libpq does not read that parameter — `PQserverVersion()` is computed by
 parsing the **`server_version`** ParameterStatus string only
 (`pqSaveParameterStatus` in fe-connect.c). NodeDB sends
