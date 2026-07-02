@@ -168,12 +168,45 @@ module ActiveRecord
           raw = @raw_connection
           if raw
             raw.send(:async_exec, "COMMIT")
-            raw.send(:async_exec, sql)
+            raw.send(:async_exec, dequalify_single_table(sql))
             raw.send(:async_exec, "BEGIN")
           end
         end
         result
       end
+
+      # NodeDB BUG-025: a WHERE predicate referencing a column with table
+      # qualification ("table"."column") silently matches ZERO rows unless
+      # it is a TEXT primary-key equality. ActiveRecord qualifies every
+      # hash-condition it generates, so all idiomatic non-PK conditions
+      # (where(name: ...), conditional count, uniqueness validation)
+      # return wrong empty results without this rewrite.
+      #
+      # Workaround: strip the statement's own target-table qualifier from
+      # single-table SELECT/UPDATE/DELETE before dispatch. Skipped for
+      # JOINs and comma-FROM (where qualification is semantically load-
+      # bearing); AR never emits those against NodeDB's supported surface.
+      # Remove when upstream resolves qualified-ref evaluation.
+      def perform_query(raw_connection, sql, binds, type_casted_binds, **kwargs)
+        super(raw_connection, dequalify_single_table(sql), binds, type_casted_binds, **kwargs)
+      end
+
+      DEQUALIFIABLE_SQL = /\A\s*(?:SELECT|UPDATE|DELETE)\b/i
+      DEQUALIFY_SKIP    = /\bJOIN\b|\bFROM\s+"[^"]+"\s*(?:,|\s+AS\b)/i
+
+      def dequalify_single_table(sql)
+        return sql unless sql.is_a?(String) && sql.match?(DEQUALIFIABLE_SQL)
+        return sql if sql.match?(DEQUALIFY_SKIP)
+
+        target = sql[/\b(?:FROM|UPDATE)\s+"([^"]+)"/i, 1]
+        return sql unless target
+
+        qualifier = "\"#{target}\"."
+        return sql unless sql.include?(qualifier)
+
+        sql.gsub(qualifier, "")
+      end
+      private :dequalify_single_table
 
       # NodeDB returns standard information_schema views over pgwire;
       # fall back gracefully for schema introspection.
