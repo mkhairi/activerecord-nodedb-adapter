@@ -63,6 +63,22 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
       expect(conn.collections).to include(name)
     end
 
+    it "BITEMPORAL DDL projects user columns on plain and history reads (BUG-027 regression)" do
+      conn.create_collection(name, engine: :document_strict, bitemporal: true, id: false) do |t|
+        t.text :id, primary_key: true
+        t.text :title
+      end
+      # Autocommit write — AR txn-wrapped writes are lost on bitemporal
+      # collections (BUG-024).
+      conn.execute("INSERT INTO #{name} (id, title) VALUES ('a', 'first')")
+
+      plain = conn.select_all("SELECT * FROM #{name}").to_a
+      expect(plain.first.keys).to contain_exactly("id", "title")
+
+      history = conn.select_all("SELECT * FROM #{name} AS OF SYSTEM TIME NULL").to_a
+      expect(history.first.keys).to include("id", "title", "_ts_system")
+    end
+
     it "drop_collection(if_exists: true) is a no-op when collection is missing" do
       expect { conn.drop_collection("nope_#{SecureRandom.hex(4)}", if_exists: true) }
         .not_to raise_error
