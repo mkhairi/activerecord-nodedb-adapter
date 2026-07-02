@@ -261,7 +261,7 @@ module ActiveRecord
       # NodeDB's SHOW commands emit a standard "SELECT N" command tag so
       # libpq is happy; no stderr noise filter needed. Both transports
       # route SHOW through the DDL router upstream (BUG-022 fixed,
-      # NodeDB-Lab/nodedb#136), so no native fail-soft is needed.
+      # upstream), so no native fail-soft is needed.
       def show_command(sql)
         select_all(sql).to_a
       end

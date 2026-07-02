@@ -84,7 +84,7 @@ RSpec.describe "ActiveRecord over transport: native", :integration do
     expect(rows.rows.flatten.join).to include("delta")
   end
 
-  # BUG-022 (resolved upstream, NodeDB-Lab/nodedb#136) — native SHOW now
+  # BUG-022 (resolved upstream) — native SHOW now
   # routes through the DDL router, so the ops helpers return real row
   # sets, not the old `{"setting" => ""}` placeholder.
   { show_stats: %w[name value], show_metrics: %w[name value],

@@ -2,7 +2,7 @@
 
 ## Status: RESOLVED (retested 2026-07-02 against upstream `3a06321e`)
 
-Fixed upstream in NodeDB-Lab/nodedb#139 (commit c0a29495). CREATE of a
+Fixed upstream in commit c0a29495. CREATE of a
 soft-deleted name now synchronously hard-purges the old collection
 before registering the new one. Verified: no resurrected rows after
 DROP + CREATE, and re-inserting a previously-used key succeeds with no

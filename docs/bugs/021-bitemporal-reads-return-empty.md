@@ -3,7 +3,7 @@
 ## Status
 
 RESOLVED — retested 2026-07-02 against upstream `3a06321e`. Fixed
-upstream in NodeDB-Lab/nodedb#135 (commits 6548e7c7 / 7e3eb92b):
+upstream in commits 6548e7c7 / 7e3eb92b:
 bitemporal collections now route the default scan and streaming
 aggregates to the versioned current-state scan, and the pgwire
 projection parser strips the temporal clause so `AS OF SYSTEM TIME`
