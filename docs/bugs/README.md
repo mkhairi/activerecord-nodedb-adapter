@@ -31,10 +31,11 @@ type) — old data dirs make the daemon panic on boot; start fresh.
 | 016 | `document_strict` 2nd INSERT collides on empty `id` when PK on non-`id` column | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#138) — doc id derived from declared PK; adapter id-column mapping (PR #24) kept as harmless convention |
 | 017 | `SHOW server_version` stuck at "NodeDB 0.1.0" | **RESOLVED** in v0.2.1 (upstream PR #114) |
 | 018 | Native protocol returns document-backed rows as a raw `{data,id}` blob (no virtual-column projection); pgwire unaffected | OPEN — `transport: native` only; no adapter workaround yet |
-| 019 | vquery pg_catalog evaluator rejects regclass casts, joins, `ANY(current_schemas)` and `pg_type.typelem` (post-`2330063a` 2026-05-23 upstream) | OPEN through v0.3.0 — re-probed 2026-06-07 against `25040fdf`; all four shapes still rejected by the in-process evaluator. Adapter bypass retained in `0.1.0.alpha.7+` |
+| 019 | vquery pg_catalog evaluator narrow shapes | OPEN, improved (`3a06321e`) — joins + `typelem` now work, but `current_schemas()` returns an empty cell (breaks AR `tables`) and `pg_range`/`pg_attrdef` vtables are missing (breaks `load_additional_types` / `column_definitions`). All bypasses stay |
 | 020 | `SHOW GRAPH STATS '<collection>'` returns all-zero counters even when the tenant-wide form proves the collection has edges | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#134) — scoped form matches tenant-wide, names bare in both; Ruby-filter removal pending (`chore/remove-bug020-workaround`) |
 | 021 | Reads against a `BITEMPORAL` collection return zero rows even when prior INSERTs reported success | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#135) — plain SELECT / count(*) / `AS OF SYSTEM TIME` all project correctly; no adapter workaround ever shipped |
 | 022 | Native protocol routes `SHOW <command>` (STATS / METRICS / MEMORY / ROLES) through the session-parameter handler instead of the DDL router | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#136) — native SHOW returns real row sets; adapter fail-soft removed in `chore/remove-bug022-workaround` |
+| 023 | MATCH `IN <collection>` ignores collection scope; plain DROP leaves edge-store entries visible to MATCH and `SHOW GRAPH STATS` | OPEN — discovered 2026-07-02 on `3a06321e`; MATCH exposure in the Graph concern on hold (#70) |
 
 ## Transport parity (pgwire vs native) — track each release
 
@@ -62,7 +63,7 @@ release and update the `native` column. Target: full parity.
 | Bug | Code path |
 | --- | --------- |
 | 002 | `nodedb_version` reads `SHOW server_version` |
-| 003 | `database_version` / `get_database_version` return hardcoded `160000`; `check_version` is a no-op |
+| 003 | `get_database_version` queries `current_setting('server_version_num')` (hardcoded `160000` fallback for older builds); `check_version` is a no-op |
 | 007 | `column_definitions` falls back to `DESCRIBE` and de-duplicates the result |
 | 008 | `NodedbAdapter#exec_delete` re-issues DELETE outside any AR-opened transaction (still required through v0.3.0 — psql with `INT NOT NULL PK` persists, but AR's `document_strict` + text-PK `destroy` path still no-ops on both pgwire and native; verified by reverting the override and watching `adapter_spec` + `native_transport_spec` both fail) |
 | ~~010, 013~~ | retired 2026-05-18 — `fts_search` issues `SELECT id … WHERE text_match()`; server filters; no bm25/unwrap |

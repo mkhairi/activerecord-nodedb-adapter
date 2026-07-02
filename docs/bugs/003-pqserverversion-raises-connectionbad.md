@@ -84,8 +84,20 @@ messages; NodeDB does not, causing libpq to raise instead of returning 0.
 
 ## Workaround (activerecord-nodedb-adapter)
 
+Since `fix/database-version-from-server` (2026-07-02): the adapter asks
+the server directly instead of hardcoding —
+
 ```ruby
-def database_version    = 160000
-def get_database_version = 160000
-def check_version;      end
+def get_database_version
+  query_value("SELECT current_setting('server_version_num')", "SCHEMA").to_i.nonzero? ||
+    FALLBACK_DATABASE_VERSION  # 160000, for builds where the setting is empty
+rescue StandardError
+  FALLBACK_DATABASE_VERSION
+end
+def check_version; end
 ```
+
+Current upstream answers `150000`, so AR's feature guards now gate on
+the server's real claimed compatibility level. The libpq-level
+`PQserverVersion()` call itself still raises (this bug) — the override
+just avoids calling it.

@@ -11,6 +11,23 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
     expect(conn.nodedb_version).to match(/\d+\.\d+/)
   end
 
+  describe "#database_version (BUG-003 workaround)", :integration do
+    it "derives the version from the server's server_version_num setting" do
+      reported = conn.query_value("SELECT current_setting('server_version_num')", "SCHEMA").to_i
+
+      if reported.positive?
+        expect(conn.get_database_version).to eq(reported)
+      else
+        expect(conn.get_database_version)
+          .to eq(described_class::FALLBACK_DATABASE_VERSION)
+      end
+    end
+
+    it "returns a version high enough for AR's PostgreSQL feature guards" do
+      expect(conn.database_version).to be >= 120000
+    end
+  end
+
   describe "#create_collection + #drop_collection", :integration do
     let(:name) { "test_adapter_#{SecureRandom.hex(4)}" }
 

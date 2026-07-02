@@ -2,6 +2,28 @@
 
 ## Status
 
+OPEN, improved — retested 2026-07-02 against upstream `3a06321e`. The
+evaluator was rebuilt as a TableProvider-backed relational executor and
+now handles much more, but the adapter bypass **must stay**:
+
+| Shape | 2026-07-02 result |
+| ----- | ----------------- |
+| `::regclass` cast in WHERE (`attrelid = 'x'::regclass`) | works (resolves; errors move past the cast) |
+| Cross-vtable joins (`pg_class JOIN pg_namespace`) | **works** — returns projected columns from both sides |
+| `pg_type.typelem` projection | **works** |
+| `ANY(current_schemas(true/false))` | still broken — `current_schemas()` returns one row with an **empty cell**, so the ANY matches nothing (0 rows, silent). Bare `SELECT current_schema` / `'x'::regclass::oid` scalar selects are empty too |
+| AR `load_additional_types` (real query) | still broken — `LEFT JOIN pg_range` fails with `table not found: pg_range` (vtable missing) |
+| AR `column_definitions` (real query) | still broken — `table not found: pg_attrdef`; `pg_collation`, `format_type()`, `pg_get_expr()`, `col_description()` also unverified (BUG-007) |
+
+Net: AR's `tables` (ANY/current_schemas), `load_additional_types`
+(pg_range), and `column_definitions` (pg_attrdef) all still fail on
+their first blocking element, so every bypass shipped in
+`0.1.0.alpha.7+` remains required. Retire piecemeal when
+`current_schemas()` returns a real array and `pg_range` / `pg_attrdef`
+vtables exist.
+
+### Earlier history
+
 OPEN upstream — retested 2026-06-07 against the **v0.3.0** release
 (commit `25040fdf`; `SHOW server_version` reports `NodeDB 0.3.0`). The
 0.3.0 changelog announces an in-process pg_catalog evaluator, but it

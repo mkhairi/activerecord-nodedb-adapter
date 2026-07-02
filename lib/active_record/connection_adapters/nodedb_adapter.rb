@@ -87,15 +87,23 @@ module ActiveRecord
         false
       end
 
-      # Override: NodeDB doesn't implement PQserverVersion() in the libpq
-      # handshake, so the pg gem raises PG::ConnectionBad when asked for it.
-      # Return a PostgreSQL 16.0-equivalent integer so AR's version guards pass.
+      # Override: NodeDB doesn't send a numeric-parseable server_version
+      # ParameterStatus, so libpq's PQserverVersion() returns 0 and the pg
+      # gem raises PG::ConnectionBad (BUG-003). Ask the server directly —
+      # current NodeDB answers current_setting('server_version_num')
+      # (e.g. 150000); fall back to a PostgreSQL 16.0-equivalent constant
+      # on older builds where that setting is empty.
+      FALLBACK_DATABASE_VERSION = 160000
+
       def database_version
-        @database_version ||= 160000
+        @database_version ||= get_database_version
       end
 
       def get_database_version
-        160000
+        query_value("SELECT current_setting('server_version_num')", "SCHEMA").to_i.nonzero? ||
+          FALLBACK_DATABASE_VERSION
+      rescue StandardError
+        FALLBACK_DATABASE_VERSION
       end
 
       # `SHOW max_identifier_length` is not answered over the native
