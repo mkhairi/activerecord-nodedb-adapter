@@ -15,7 +15,7 @@ type) — old data dirs make the daemon panic on boot; start fresh.
 | --- | ----- | ------ |
 | 001 | INSERT returns `ResourcesExhausted` on non-timeseries engines | RESOLVED — fixed in nodedb v0.2.0 (`EngineConfig` covers all 15 engines) |
 | 002 | `SELECT version()` returns empty | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#142) — `version()`, `current_setting('server_version_num')` and `('server_version')` all real; BUG-003 (`PQserverVersion`) still open |
-| 003 | `PQserverVersion()` raises `PG::ConnectionBad` | OPEN — adapter hardcodes `160000` |
+| 003 | `PQserverVersion()` raises `PG::ConnectionBad` | OPEN (retested `3a06321e`) — libpq parses the `server_version` ParameterStatus only, and `"NodeDB 0.3.0"` is non-numeric; the `server_version_num` param added upstream in #142 is ignored by libpq. Adapter hardcodes `160000` |
 | 004 | `DROP COLLECTION IF EXISTS` parses `IF` as a name when collection exists | **RESOLVED** in v0.2.1 — adapter now emits `DROP COLLECTION IF EXISTS` directly (workaround retired) |
 | 005 | Prepared statements missing `RowDescription` before `DataRow` | RESOLVED |
 | 006 | Unknown OID `0` for boolean column | RESOLVED |
