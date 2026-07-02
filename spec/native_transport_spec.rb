@@ -84,14 +84,21 @@ RSpec.describe "ActiveRecord over transport: native", :integration do
     expect(rows.rows.flatten.join).to include("delta")
   end
 
-  # BUG-022 — NodeDB v0.3.0 native protocol routes SHOW STATS / METRICS /
-  # MEMORY / ROLES through the session-parameter handler instead of the
-  # DDL router, so each comes back as a placeholder
-  # `{"setting" => ""}` row. The adapter detects that shape and returns
-  # [] so callers don't render misleading single-row "results".
-  %i[show_stats show_metrics show_memory show_roles].each do |op|
-    it "returns [] for #{op} over native (BUG-022 fail-soft)" do
-      expect(conn.public_send(op)).to eq([])
+  # BUG-022 (resolved upstream, NodeDB-Lab/nodedb#136) — native SHOW now
+  # routes through the DDL router, so the ops helpers return real row
+  # sets, not the old `{"setting" => ""}` placeholder.
+  { show_stats: %w[name value], show_metrics: %w[name value],
+    show_memory: %w[engine allocated_bytes] }.each do |op, expected_keys|
+    it "returns real rows for #{op} over native" do
+      rows = conn.public_send(op)
+      expect(rows).not_to be_empty
+      expect(rows.first.keys).to include(*expected_keys)
     end
+  end
+
+  it "returns a real (possibly empty) row set for show_roles over native" do
+    rows = conn.show_roles
+    expect(rows).to be_an(Array)
+    expect(rows.none? { |r| r.keys == ["setting"] }).to be(true)
   end
 end

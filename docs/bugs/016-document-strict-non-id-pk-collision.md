@@ -1,6 +1,18 @@
 # BUG-016: document_strict second INSERT collides on empty `id` when PRIMARY KEY is on a non-`id` column
 
-## Status: OPEN (2026-05-10)
+## Status: RESOLVED (retested 2026-07-02 against upstream `3a06321e`)
+
+Fixed upstream in NodeDB-Lab/nodedb#138 (commit 967dff93). The doc id
+is now derived from the user-declared PRIMARY KEY column instead of
+guessed `id`/`document_id`/`key` names. Verified: multiple INSERTs
+with a non-`id` PK round-trip, and a genuine duplicate is rejected
+naming the real key value.
+
+The `Nodedb::SchemaMigration` / `Nodedb::InternalMetadata` id-column
+mapping (PR #24) still ships — it works correctly either way;
+unwinding it is optional cleanup, not a correctness fix.
+
+### Earlier history (OPEN, 2026-05-10)
 
 A `WITH (engine='document_strict')` collection that declares its
 PRIMARY KEY on any column other than `id` accepts the first INSERT
