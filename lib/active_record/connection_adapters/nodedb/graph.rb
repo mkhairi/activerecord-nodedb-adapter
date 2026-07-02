@@ -19,9 +19,13 @@ module NodeDB
     LIBPQ_NOISE_RE = /\Acould not interpret result from server: (INSERT EDGE|GRAPH [A-Z ]+)/
 
     class_methods do
+      # The IN clause takes the bare collection name: NodeDB stores a
+      # double-quoted identifier verbatim in the edge-store key, which
+      # breaks scoped `SHOW GRAPH STATS '<name>'` lookups (bare and
+      # single-quoted forms normalize correctly).
       def graph_insert_edge(from:, to:, type:, properties: {})
         sql = NodeDB::SQL::Graph.insert_edge(
-          in_collection:   quoted_table_name,
+          in_collection:   table_name,
           from:            connection.quote(from),
           to:              connection.quote(to),
           type:            connection.quote(type),
@@ -54,7 +58,7 @@ module NodeDB
       end
 
       def graph_algo(algo, **options)
-        sql = NodeDB::SQL::Graph.algo(table: quoted_table_name, algo: algo, **options)
+        sql = NodeDB::SQL::Graph.algo(table: table_name, algo: algo, **options)
         NodeDB::Graph.silence_libpq_noise { connection.select_all(sql) }
       end
 
@@ -78,20 +82,15 @@ module NodeDB
       # with columns `collection`, `label`, `edge_count`.
       # `as_of` is a millisecond timestamp.
       #
-      # NodeDB v0.3.0's `SHOW GRAPH STATS '<collection>'` form returns
-      # all-zero counters (upstream bug — scoping does not reach the
-      # stored counters), so the helper fetches the tenant-wide form and
-      # filters in Ruby. Once the upstream scoping bug is fixed, this can
-      # delegate to `connection.graph_stats(collection: …)`.
-      #
       #   SocialNode.graph_stats
       #   SocialNode.graph_stats(verbose: true)
       #   SocialNode.graph_stats(as_of: 1.hour.ago.to_i * 1000)
       def graph_stats(verbose: false, as_of: nil)
-        wanted = table_name.to_s
-        connection
-          .graph_stats(verbose: verbose, as_of: as_of)
-          .select { |row| row["collection"].to_s.delete('"') == wanted }
+        connection.graph_stats(
+          collection: connection.quote(table_name),
+          verbose:    verbose,
+          as_of:      as_of
+        )
       end
     end
 
