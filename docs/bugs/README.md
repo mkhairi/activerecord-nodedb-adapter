@@ -37,7 +37,8 @@ type) — old data dirs make the daemon panic on boot; start fresh.
 | 022 | Native protocol routes `SHOW <command>` (STATS / METRICS / MEMORY / ROLES) through the session-parameter handler instead of the DDL router | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#136) — native SHOW returns real row sets; adapter fail-soft removed in `chore/remove-bug022-workaround` |
 | 023 | MATCH `IN <collection>` ignores collection scope; plain DROP leaves edge-store entries visible to MATCH and `SHOW GRAPH STATS` | OPEN — discovered 2026-07-02 on `3a06321e`; MATCH exposure in the Graph concern on hold (#70) |
 | 024 | Bitemporal collections lose INSERT and DELETE committed inside explicit transactions (UPDATE unaffected) | OPEN — discovered 2026-07-02 on `3a06321e`; AR cannot write bitemporal collections; `NodeDB::Bitemporal` read helpers parked on `feat/bitemporal-read-helpers` (#72) |
-| 025 | Table-qualified column refs in WHERE silently match zero rows (except TEXT PK equality) — breaks every AR hash-condition on non-PK columns | OPEN — discovered 2026-07-02 on `3a06321e` while evaluating app-level bitemporality; adapter dequalification workaround to be prototyped (#74) |
+| 025 | Table-qualified column refs in WHERE silently match zero rows (except TEXT PK equality) — breaks every AR hash-condition on non-PK columns | OPEN — discovered 2026-07-02 on `3a06321e`; adapter ships a dequalification rewrite in `perform_query` (`fix/dequalify-single-table-where`), #74 |
+| 026 | User column named `bitemporal_id` on plain document_strict triggers BUG-024-style txn INSERT loss | OPEN — discovered 2026-07-02 on `3a06321e`; avoid the column name; blocks kufu-style app-level BTDM (#76) |
 
 ## Transport parity (pgwire vs native) — track each release
 
@@ -73,6 +74,7 @@ release and update the `native` column. Target: full parity.
 | 016 | `Nodedb::SchemaMigration` / `Nodedb::InternalMetadata` declare PK on the built-in `id` column |
 | 019 | `load_additional_types` no-op on every transport; `tables`, `primary_keys`, `pk_and_sequence_for`, `indexes`, `foreign_keys`, `check_constraints` use NodeDB-native paths on every transport (vquery refactor extends BUG-018-style gap to pgwire) |
 | 020 | `NodeDB::Graph#graph_stats` issues the tenant-wide `SHOW GRAPH STATS` and filters the result set in Ruby (upstream fixed on `3a06321e`; removal pending as `chore/remove-bug020-workaround`) |
+| 025 | `NodedbAdapter#perform_query` strips the target-table qualifier from single-table SELECT/UPDATE/DELETE (JOIN/comma-FROM/aliased statements untouched); same rewrite on the BUG-008 `exec_delete` re-issue |
 | ~~022~~ | retired 2026-07-02 — native SHOW routes through the DDL router upstream; `show_command` forwards rows as-is |
 
 ## Workaround retirement strategy

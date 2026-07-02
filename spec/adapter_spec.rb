@@ -111,6 +111,53 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
     end
   end
 
+  describe "BUG-025 qualified-WHERE dequalification", :integration do
+    let(:name) { "dequal_#{SecureRandom.hex(4)}" }
+
+    before do
+      conn.create_collection(name, engine: :document_strict, id: false) do |t|
+        t.text :id, primary_key: true
+        t.text :label
+        t.integer :score
+      end
+
+      tname = name
+      model = Class.new(ActiveRecord::Base) do
+        self.table_name         = tname
+        self.primary_key        = "id"
+        self.inheritance_column = :_type_disabled
+      end
+      stub_const("DequalModel", model)
+      DequalModel.create!(id: "r1", label: "alpha", score: 7)
+      DequalModel.create!(id: "r2", label: "beta",  score: 3)
+    end
+
+    after { conn.drop_collection(name, if_exists: true) }
+
+    it "hash-where on a non-PK column finds rows (was silently empty)" do
+      expect(DequalModel.where(label: "alpha").to_a.map(&:id)).to eq(["r1"])
+    end
+
+    it "conditional count works" do
+      expect(DequalModel.where(score: 7).count).to eq(1)
+    end
+
+    it "qualified Arel range predicates find rows" do
+      rows = DequalModel.where(DequalModel.arel_table[:score].gteq(5)).to_a
+      expect(rows.map(&:id)).to eq(["r1"])
+    end
+
+    it "leaves JOIN statements untouched" do
+      sql = %(SELECT "a"."x" FROM "a" JOIN "b" ON "a"."id" = "b"."a_id")
+      expect(conn.send(:dequalify_single_table, sql)).to eq(sql)
+    end
+
+    it "leaves aliased FROM untouched" do
+      sql = %(SELECT "t"."x" FROM "orders" AS "t" WHERE "t"."x" = 1)
+      expect(conn.send(:dequalify_single_table, sql)).to eq(sql)
+    end
+  end
+
   describe "record.destroy under NodeDB BUG-008 (PARTIAL fix in v0.2.1)", :integration do
     let(:name) { "txn_delete_#{SecureRandom.hex(4)}" }
 

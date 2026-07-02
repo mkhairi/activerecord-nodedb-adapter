@@ -42,11 +42,20 @@ matching nothing.
 - Suite needs a regression spec asserting a qualified non-PK `where`
   finds rows (currently passes vacuously on emptiness assertions).
 
-## Workaround (candidate, not shipped)
+## Workaround (shipped 2026-07-02, `fix/dequalify-single-table-where`)
 
-Adapter-side rewrite stripping `"<table_name>".` qualification from
-single-table SELECT/UPDATE/DELETE before dispatch (safe when no
-JOIN/alias present). Prototype as `fix/dequalify-single-table-where`.
+`NodedbAdapter#perform_query` rewrites single-table
+SELECT/UPDATE/DELETE before dispatch, stripping the statement's own
+target-table qualifier (`"<target>".`). Statements containing a JOIN,
+comma-FROM, or `FROM ... AS` alias are left untouched — qualification
+is semantically load-bearing there, and AR does not emit those against
+NodeDB's supported surface. The BUG-008 `exec_delete` re-issue path
+applies the same rewrite (it bypasses `perform_query`).
+
+Regression specs assert a non-PK hash-`where` finds rows, conditional
+`count` works, and qualified Arel range predicates match — all of
+which returned wrong empty results before. Remove the rewrite when
+upstream evaluates qualified refs.
 
 ## Tracking
 
