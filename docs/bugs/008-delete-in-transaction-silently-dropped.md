@@ -33,7 +33,7 @@ outside the transaction takes the clean autocommit path, so AR
 
 ## Upstream tracking
 
-Filed 2026-07-02 as NodeDB-Lab/nodedb#148 (stale PK point-lookup
+Reported upstream 2026-07-02 (stale PK point-lookup
 after committed transactional DELETE).
 
 ## Earlier history

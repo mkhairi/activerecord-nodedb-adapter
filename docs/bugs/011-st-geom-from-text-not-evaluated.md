@@ -2,7 +2,7 @@
 
 ## Status: RESOLVED (retested 2026-07-02 against upstream `3a06321e`)
 
-Fixed upstream in NodeDB-Lab/nodedb#141 (commit 90eb3124).
+Fixed upstream in commit 90eb3124.
 `ST_GeomFromText`, `ST_MakePoint`, and `ST_GeomFromWKB` now evaluate
 as geometry constructors on INSERT; the value is stored as GeoJSON and
 round-trips on a raw column read:

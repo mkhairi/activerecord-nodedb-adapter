@@ -2,7 +2,7 @@
 
 ## Status: RESOLVED (retested 2026-07-02 against upstream `3a06321e`)
 
-Fixed upstream in NodeDB-Lab/nodedb#138 (commit 967dff93). The doc id
+Fixed upstream in commit 967dff93. The doc id
 is now derived from the user-declared PRIMARY KEY column instead of
 guessed `id`/`document_id`/`key` names. Verified: multiple INSERTs
 with a non-`id` PK round-trip, and a genuine duplicate is rejected

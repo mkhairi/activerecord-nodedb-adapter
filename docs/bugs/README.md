@@ -14,27 +14,27 @@ type) — old data dirs make the daemon panic on boot; start fresh.
 | ID  | Title | Status |
 | --- | ----- | ------ |
 | 001 | INSERT returns `ResourcesExhausted` on non-timeseries engines | RESOLVED — fixed in nodedb v0.2.0 (`EngineConfig` covers all 15 engines) |
-| 002 | `SELECT version()` returns empty | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#142) — `version()`, `current_setting('server_version_num')` and `('server_version')` all real; BUG-003 (`PQserverVersion`) still open |
+| 002 | `SELECT version()` returns empty | **RESOLVED** upstream (`3a06321e`) — `version()`, `current_setting('server_version_num')` and `('server_version')` all real; BUG-003 (`PQserverVersion`) still open |
 | 003 | `PQserverVersion()` raises `PG::ConnectionBad` | OPEN (retested `3a06321e`) — libpq parses the `server_version` ParameterStatus only, and `"NodeDB 0.3.0"` is non-numeric; the `server_version_num` param the upstream build now advertises is ignored by libpq. Adapter hardcodes `160000` |
 | 004 | `DROP COLLECTION IF EXISTS` parses `IF` as a name when collection exists | **RESOLVED** in v0.2.1 — adapter now emits `DROP COLLECTION IF EXISTS` directly (workaround retired) |
 | 005 | Prepared statements missing `RowDescription` before `DataRow` | RESOLVED |
 | 006 | Unknown OID `0` for boolean column | RESOLVED |
 | 007 | `pg_attribute` query returns duplicate `id` row | RESHAPED by [BUG-019](019-vquery-pg-catalog-narrow-shapes.md) — vquery refactor changes pg_attribute behaviour; adapter still bypasses via `DESCRIBE` |
-| 008 | DELETE inside transaction silently dropped | **RESHAPED** on `3a06321e` — txn DELETE now persists (scans clean, all PK forms), but the PK point-lookup serves a phantom of the deleted row until the key is re-inserted. Filed upstream as NodeDB-Lab/nodedb#148. `exec_delete` workaround stays (autocommit re-issue avoids the phantom) |
+| 008 | DELETE inside transaction silently dropped | **RESHAPED** on `3a06321e` — txn DELETE now persists (scans clean, all PK forms), but the PK point-lookup serves a phantom of the deleted row until the key is re-inserted. Reported upstream 2026-07-02. `exec_delete` workaround stays (autocommit re-issue avoids the phantom) |
 | 009 | INSERT command tag missing OID slot | **RESOLVED** in v0.2.1 — `INSERT 0 N` form now emitted |
 | 010 | `text_match()` predicate doesn't filter rows | **RESOLVED** upstream (2026-05-18 build) — filters server-side; adapter bm25 workaround retired |
-| 011 | Spatial INSERT does not evaluate `ST_GeomFromText` | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#141) — constructors evaluate, GeoJSON round-trips; read-side `ST_AsText`/`ST_X`/`ST_DWithin` still broken (separate issue) |
+| 011 | Spatial INSERT does not evaluate `ST_GeomFromText` | **RESOLVED** upstream (`3a06321e`) — constructors evaluate, GeoJSON round-trips; read-side `ST_AsText`/`ST_X`/`ST_DWithin` still broken (separate issue) |
 | 012 | Spatial engine drops non-geometry typed columns on INSERT | **RESOLVED** upstream (`3a06321e`) — typed scalars round-trip on `engine=spatial` |
 | 013 | FTS fuzzy mode returns wrapped JSON | **RESOLVED** upstream (2026-05-18 build) — flat projection in fuzzy mode; adapter unwrap retired |
 | 014 | `pg_try_advisory_lock` / `pg_advisory_unlock` missing | PARTIAL through v0.3.0 — parsed, still return zero rows (not boolean); adapter stubs still required |
-| 015 | DROP + CREATE resurrects old rows in retention window | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#139) — CREATE over a soft-deleted name hard-purges first |
-| 016 | `document_strict` 2nd INSERT collides on empty `id` when PK on non-`id` column | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#138) — doc id derived from declared PK; adapter id-column mapping (PR #24) kept as harmless convention |
+| 015 | DROP + CREATE resurrects old rows in retention window | **RESOLVED** upstream (`3a06321e`) — CREATE over a soft-deleted name hard-purges first |
+| 016 | `document_strict` 2nd INSERT collides on empty `id` when PK on non-`id` column | **RESOLVED** upstream (`3a06321e`) — doc id derived from declared PK; adapter id-column mapping (PR #24) kept as harmless convention |
 | 017 | `SHOW server_version` stuck at "NodeDB 0.1.0" | **RESOLVED** in v0.2.1 (upstream PR #114) |
 | 018 | Native protocol returns document-backed rows as a raw `{data,id}` blob (no virtual-column projection); pgwire unaffected | OPEN — `transport: native` only; no adapter workaround yet |
 | 019 | vquery pg_catalog evaluator narrow shapes | OPEN, improved (`3a06321e`) — joins + `typelem` now work, but `current_schemas()` returns an empty cell (breaks AR `tables`) and `pg_range`/`pg_attrdef` vtables are missing (breaks `load_additional_types` / `column_definitions`). All bypasses stay |
-| 020 | `SHOW GRAPH STATS '<collection>'` returns all-zero counters even when the tenant-wide form proves the collection has edges | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#134) — scoped form matches tenant-wide, names bare in both; Ruby-filter removal pending (`chore/remove-bug020-workaround`) |
-| 021 | Reads against a `BITEMPORAL` collection return zero rows even when prior INSERTs reported success | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#135) — plain SELECT / count(*) / `AS OF SYSTEM TIME` all project correctly; no adapter workaround ever shipped |
-| 022 | Native protocol routes `SHOW <command>` (STATS / METRICS / MEMORY / ROLES) through the session-parameter handler instead of the DDL router | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#136) — native SHOW returns real row sets; adapter fail-soft removed in `chore/remove-bug022-workaround` |
+| 020 | `SHOW GRAPH STATS '<collection>'` returns all-zero counters even when the tenant-wide form proves the collection has edges | **RESOLVED** upstream (`3a06321e`) — scoped form matches tenant-wide, names bare in both; Ruby-filter removal pending (`chore/remove-bug020-workaround`) |
+| 021 | Reads against a `BITEMPORAL` collection return zero rows even when prior INSERTs reported success | **RESOLVED** upstream (`3a06321e`) — plain SELECT / count(*) / `AS OF SYSTEM TIME` all project correctly; no adapter workaround ever shipped |
+| 022 | Native protocol routes `SHOW <command>` (STATS / METRICS / MEMORY / ROLES) through the session-parameter handler instead of the DDL router | **RESOLVED** upstream (`3a06321e`) — native SHOW returns real row sets; adapter fail-soft removed in `chore/remove-bug022-workaround` |
 | 023 | MATCH `IN <collection>` ignores collection scope; plain DROP leaves edge-store entries visible to MATCH and `SHOW GRAPH STATS` | OPEN — discovered 2026-07-02 on `3a06321e`; MATCH exposure in the Graph concern on hold (#70) |
 | 024 | Bitemporal collections lose INSERT and DELETE committed inside explicit transactions (UPDATE unaffected) | OPEN — discovered 2026-07-02 on `3a06321e`; AR cannot write bitemporal collections; `NodeDB::Bitemporal` read helpers parked on `feat/bitemporal-read-helpers` (#72) |
 | 025 | Table-qualified column refs in WHERE silently match zero rows (except TEXT PK equality) — breaks every AR hash-condition on non-PK columns | OPEN — discovered 2026-07-02 on `3a06321e`; adapter ships a dequalification rewrite in `perform_query` (`fix/dequalify-single-table-where`), #74 |
@@ -99,8 +99,8 @@ release and update the `native` column. Target: full parity.
   fallback (JSON-expand `data` on native) is the contingency if upstream
   declines parity.
 
-- **022** workaround **retired** 2026-07-02 (upstream `3a06321e`,
-  NodeDB-Lab/nodedb#136): `show_command` no longer detects the native
+- **022** workaround **retired** 2026-07-02 (upstream `3a06321e`):
+  `show_command` no longer detects the native
   placeholder shape; `native_show_placeholder?` deleted. The
   native-transport specs assert real row sets for
   `show_stats` / `show_metrics` / `show_memory` and a non-placeholder

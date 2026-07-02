@@ -3,7 +3,7 @@
 ## Status
 
 RESOLVED — retested 2026-07-02 against upstream `3a06321e`. Fixed
-upstream in NodeDB-Lab/nodedb#134 (`summary_key` canonicalization on
+upstream (`summary_key` canonicalization on
 both insert and scoped-read paths). Both retirement criteria below
 verified: the scoped form returns the same counters as the matching
 tenant-wide row, and the `collection` cell is bare in both forms.

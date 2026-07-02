@@ -3,7 +3,7 @@
 ## Status
 
 RESOLVED — retested 2026-07-02 against upstream `3a06321e`. Fixed
-upstream in NodeDB-Lab/nodedb#136 (commit 751b9cc3): the native SQL
+upstream in commit 751b9cc3: the native SQL
 dispatcher now runs the DDL/admin router before the session-variable
 fallback, mirroring the pgwire fix. Verified over native: `SHOW STATS`
 → 22 `(name, value)` rows, `SHOW METRICS` → 26, `SHOW MEMORY` → 15

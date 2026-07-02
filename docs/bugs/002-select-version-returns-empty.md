@@ -2,7 +2,7 @@
 
 ## Status: RESOLVED (retested 2026-07-02 against upstream `3a06321e`)
 
-Fixed upstream in NodeDB-Lab/nodedb#142 (commits 15ae22e6 / e137985e /
+Fixed upstream in commits 15ae22e6 / e137985e /
 f9e21b3f). `SELECT version()` returns
 `PostgreSQL 15.0 (NodeDB) on x86_64`;
 `current_setting('server_version_num')` returns `150000`;
