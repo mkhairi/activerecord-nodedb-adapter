@@ -1,47 +1,14 @@
 # Known issues
 
 NodeDB-side quirks and limits, grouped by what they mean for adapter
-users. Per-bug reproductions, history, and workaround details live in
-[`docs/bugs/`](bugs/README.md).
+users. Per-bug reproductions and workaround details live in
+[`docs/bugs/`](bugs/README.md). This list tracks the **latest upstream
+only** — resolved issues are pruned (git history and the CHANGELOG
+keep the record).
 
 Last retested: **2026-07-02** against upstream `main` at `3a06321e`
 (post-v0.3.0). Note: that build changed the on-disk format — daemons
 booted on pre-June data directories panic at startup; start fresh.
-
-## Resolved upstream
-
-No adapter action needed on current builds:
-
-- **BUG-001** `ResourcesExhausted` on non-timeseries INSERT (v0.2.0).
-- **BUG-004** `DROP COLLECTION IF EXISTS` parser quirk (v0.2.1).
-- **BUG-005** Prepared statements missing `RowDescription` — fixed;
-  adapter still uses simple-query mode for safety.
-- **BUG-006** Boolean column OID 0.
-- **BUG-009** `INSERT` command tag missing OID slot (v0.2.1).
-- **BUG-010 / BUG-013** FTS `text_match()` filtering and fuzzy JSON
-  shape (2026-05-18 build); bm25/unwrap workarounds retired.
-- **BUG-017** `SHOW server_version` stuck at 0.1.0 (v0.2.1).
-- **BUG-002** `SELECT version()` empty — now returns a
-  PostgreSQL-compatible banner; `current_setting('server_version_num')`
-  returns a real value.
-- **BUG-011 / BUG-012** Spatial INSERT: `ST_GeomFromText` /
-  `ST_MakePoint` / `ST_GeomFromWKB` evaluate, geometry round-trips as
-  GeoJSON, typed scalar columns persist. (Read-side accessors still
-  broken — see below.)
-- **BUG-015** DROP + CREATE resurrecting rows from the retention
-  window — CREATE now hard-purges the soft-deleted incarnation.
-- **BUG-016** `document_strict` empty-id collision with a non-`id`
-  PK — doc id now derives from the declared PRIMARY KEY column.
-- **BUG-020** `SHOW GRAPH STATS '<collection>'` all-zero counters —
-  scoped form now correct (adapter Ruby-filter removal pending).
-- **BUG-021** Bitemporal reads returning zero rows — plain SELECT,
-  `count(*)` and `AS OF SYSTEM TIME` all project correctly now.
-  (Bitemporal *transactional writes* are still broken — see BUG-024.)
-- **BUG-022** Native-protocol SHOW routing — STATS/METRICS/MEMORY/ROLES
-  return real row sets; adapter fail-soft retired.
-- **`fts` engine removed upstream** — FTS is a `document_strict`
-  collection + `CREATE FULLTEXT INDEX`. Use `create_fts(name,
-  fulltext: [...])`; legacy `engine: :fts` maps to `document_strict`.
 
 ## Adapter compensates transparently
 
@@ -77,6 +44,11 @@ You write idiomatic AR; the adapter swallows the workaround:
   `get_advisory_lock` / `release_advisory_lock` stubs so
   `db:migrate` works; cross-process migration mutex semantics are
   lost (acceptable single-instance alpha trade-off).
+- **Edge-store keys track the IN-clause spelling verbatim** — a
+  double-quoted identifier in `GRAPH INSERT EDGE IN "name"` stores a
+  literal-quoted key that scoped `SHOW GRAPH STATS` lookups miss. The
+  Graph concern passes bare collection names for edge inserts and
+  algo calls.
 - **`schema_migrations` / `ar_internal_metadata`** — NodeDB-aware
   subclasses use `CREATE COLLECTION` + raw unqualified SQL; `rails
   db:migrate` works normally.

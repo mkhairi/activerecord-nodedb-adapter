@@ -306,21 +306,19 @@ end
 
 - Ruby 3.2+
 - Rails 7.1+ (verified on 8.1.3)
-- NodeDB v0.1+ (pgwire on port 6432) — **v0.3.0 recommended**.
-  Bundles `SHOW GRAPH STATS`, personalized PageRank, the
-  `BITEMPORAL` collection modifier, an in-process pg_catalog
-  evaluator (still narrow — see BUG-019), and the operational
-  `SHOW ROLES / STATS / METRICS / MEMORY / TENANT` surface.
-  - 2026-05-18 build: `fts` engine removed (use `create_fts`).
-  - Post-2026-05-23 builds added a vquery pg_catalog evaluator
-    that rejects four of the shapes AR's connection handshake
-    needs. Adapter `0.1.0.alpha.7+` bypasses every affected catalog
-    query on every transport (see BUG-019).
-  - Dev environments running the post-`f9e19d84` lockout enforcement
-    need `[auth] max_failed_logins = 0` in a TOML config; without it,
-    the auth lockout state (persistent across daemon restart in
-    `_system.lockout_state`) trips on routine probe sequences and
-    surfaces as `FATAL: Password authentication failed`.
+- NodeDB (pgwire on port 6432) — **latest upstream `main` recommended**
+  (verified against `3a06321e`, post-v0.3.0). Brings `SHOW GRAPH STATS`
+  scoping, bitemporal reads, spatial geometry constructors,
+  `version()` / `current_setting()` probes, graph MATCH, and
+  multi-database DDL. Adapter still bypasses AR's pg_catalog
+  introspection (see BUG-019 in `docs/bugs/`).
+  - On-disk format changed vs pre-June builds — old data dirs make
+    the daemon panic at boot; start with a fresh data directory.
+  - `fts` engine removed upstream (use `create_fts`).
+  - Dev environments need `[auth] max_failed_logins = 0` in a TOML
+    config; without it, persistent lockout state trips on routine
+    probe sequences and surfaces as
+    `FATAL: Password authentication failed`.
 
 ## Feature checklist
 
@@ -328,7 +326,8 @@ end
 - [x] Connection adapter that registers under `adapter: nodedb`
 - [x] Simple-query mode (NodeDB does not implement extended-query
       `RowDescription` for prepared statements)
-- [x] `database_version` stub returning `160000` so AR's PG version guards pass
+- [x] `database_version` derived from `current_setting('server_version_num')`
+      (fallback `160000` for older builds) so AR's PG version guards pass
 - [x] `nodedb_version` introspection from `SHOW server_version`
 - [x] Migration DSL: `create_collection`, `create_vector_index`,
       `drop_collection(if_exists:)`, `drop_vector_index`
@@ -348,12 +347,14 @@ end
 - [x] `connection.with_settings { … }` block for scoped session vars
 - [x] Model concerns: `NodeDB::Vector`, `Graph`, `Timeseries`, `Spatial`, `KV`,
       `FullTextSearch`
-- [x] `record.destroy` workaround for NodeDB BUG-008 (DELETE-in-txn dropped)
+- [x] `record.destroy` workaround for NodeDB BUG-008 (transactional DELETE
+      leaves a stale PK point-lookup phantom; adapter re-issues on the clean
+      autocommit path)
 - [x] `Graph.silence_libpq_noise` filter for harmless libpq stderr warnings
 - [x] `create_fts(name, fulltext: [...])` — document_strict collection + `CREATE FULLTEXT INDEX` (NodeDB removed the `fts` engine)
 - [x] `drop_collection` rescues missing-collection errors when `if_exists: true`
-- [x] `create_collection ..., bitemporal: true` — NodeDB v0.3.0 `BITEMPORAL` collection modifier (writes work; reads currently blocked by upstream BUG-021)
-- [x] `Model.graph_stats(verbose:, as_of:)` + `connection.graph_stats(collection:, verbose:, as_of:)` — NodeDB v0.3.0 `SHOW GRAPH STATS` with the upstream-scoping-bug Ruby fallback (see BUG-020)
+- [x] `create_collection ..., bitemporal: true` — NodeDB `BITEMPORAL` collection modifier (reads work on current upstream; transactional writes blocked by upstream BUG-024, so AR models can't populate bitemporal collections yet)
+- [x] `Model.graph_stats(verbose:, as_of:)` + `connection.graph_stats(collection:, verbose:, as_of:)` — `SHOW GRAPH STATS`, scoped form (upstream scoping fixed; Ruby fallback retired)
 - [x] `Graph#graph_algo(:pagerank, personalization: {...})` — NodeDB v0.3.0 personalized PageRank with Hash → JSON encoding (via nodedb-ruby `SQL::Graph.algo`)
 - [x] `connection.show_stats / show_metrics / show_memory / show_roles / show_tenant / show_tenants / set_tenant` — operational SHOW surface; tenant identifier args validated through a strict allowlist to avoid SQL-injection through the bare-identifier interpolation
 - [x] Sample Rails 8 app with full CRUD walkthrough: [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails)
