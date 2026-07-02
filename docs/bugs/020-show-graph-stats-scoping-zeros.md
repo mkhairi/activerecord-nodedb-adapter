@@ -2,6 +2,18 @@
 
 ## Status
 
+RESOLVED — retested 2026-07-02 against upstream `3a06321e`. Fixed
+upstream in NodeDB-Lab/nodedb#134 (`summary_key` canonicalization on
+both insert and scoped-read paths). Both retirement criteria below
+verified: the scoped form returns the same counters as the matching
+tenant-wide row, and the `collection` cell is bare in both forms.
+
+The `NodeDB::Graph#graph_stats` tenant-wide + Ruby-filter workaround
+(PR #55) is still shipped; removal tracked as
+`chore/remove-bug020-workaround`.
+
+### Earlier history
+
 OPEN upstream — observed 2026-06-07 against the **v0.3.0** release
 (commit `25040fdf`; `SHOW server_version` reports `NodeDB 0.3.0`).
 Adapter `0.1.0.alpha.8+` ships a tenant-wide + Ruby-filter workaround

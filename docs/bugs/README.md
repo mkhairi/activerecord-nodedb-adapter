@@ -4,17 +4,17 @@ NodeDB-side bugs the adapter has had to dance around. Each entry has a
 matching `<id>-<slug>.md` doc with reproduction, expected behaviour, and
 adapter workaround.
 
-Last refreshed: **2026-06-07** against the **v0.3.0** upstream release
-(commit `25040fdf`; `SHOW server_version` reports `NodeDB 0.3.0`). Upstream
-landed 21 commits since `2aaec0fd`, including an in-process pg_catalog
-evaluator (still narrow — see BUG-019 below), personalized PageRank,
-hybrid-search prefiltering with `allowed_ids`, linear-weight RRF fusion,
-and bitemporal documents.
+Last refreshed: **2026-07-02** against upstream `main` at `3a06321e`
+(post-v0.3.0, ~295 commits past `25040fdf`; `SHOW server_version` still
+reports `NodeDB 0.3.0`). This build fixed eight tracked bugs in one
+sweep (002, 011, 012, 015, 016, 020, 021, 022 — see below). Note: the
+on-disk format changed vs pre-June builds (redb graph `edges` table
+type) — old data dirs make the daemon panic on boot; start fresh.
 
 | ID  | Title | Status |
 | --- | ----- | ------ |
 | 001 | INSERT returns `ResourcesExhausted` on non-timeseries engines | RESOLVED — fixed in nodedb v0.2.0 (`EngineConfig` covers all 15 engines) |
-| 002 | `SELECT version()` returns empty | OPEN — adapter uses `SHOW server_version` |
+| 002 | `SELECT version()` returns empty | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#142) — `version()`, `current_setting('server_version_num')` and `('server_version')` all real; BUG-003 (`PQserverVersion`) still open |
 | 003 | `PQserverVersion()` raises `PG::ConnectionBad` | OPEN — adapter hardcodes `160000` |
 | 004 | `DROP COLLECTION IF EXISTS` parses `IF` as a name when collection exists | **RESOLVED** in v0.2.1 — adapter now emits `DROP COLLECTION IF EXISTS` directly (workaround retired) |
 | 005 | Prepared statements missing `RowDescription` before `DataRow` | RESOLVED |
@@ -23,18 +23,18 @@ and bitemporal documents.
 | 008 | DELETE inside transaction silently dropped | **PARTIAL** through v0.3.0 — psql probe with `INT NOT NULL PRIMARY KEY` persists DELETE in txn on `25040fdf`, but AR's `record.destroy` path on `document_strict` with text PK still no-ops on both pgwire and native; `exec_delete` workaround still required |
 | 009 | INSERT command tag missing OID slot | **RESOLVED** in v0.2.1 — `INSERT 0 N` form now emitted |
 | 010 | `text_match()` predicate doesn't filter rows | **RESOLVED** upstream (2026-05-18 build) — filters server-side; adapter bm25 workaround retired |
-| 011 | Spatial INSERT does not evaluate `ST_GeomFromText` | CHANGED — now hard error (was silent text store); spatial engine still unusable |
-| 012 | Spatial engine drops non-geometry typed columns on INSERT | OBSCURED by 011 (cannot INSERT to test) |
+| 011 | Spatial INSERT does not evaluate `ST_GeomFromText` | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#141) — constructors evaluate, GeoJSON round-trips; read-side `ST_AsText`/`ST_X`/`ST_DWithin` still broken (separate issue) |
+| 012 | Spatial engine drops non-geometry typed columns on INSERT | **RESOLVED** upstream (`3a06321e`) — typed scalars round-trip on `engine=spatial` |
 | 013 | FTS fuzzy mode returns wrapped JSON | **RESOLVED** upstream (2026-05-18 build) — flat projection in fuzzy mode; adapter unwrap retired |
 | 014 | `pg_try_advisory_lock` / `pg_advisory_unlock` missing | PARTIAL through v0.3.0 — parsed, still return zero rows (not boolean); adapter stubs still required |
-| 015 | DROP + CREATE resurrects old rows in retention window | OPEN — sample app reconciles in `bin/setup` |
-| 016 | `document_strict` 2nd INSERT collides on empty `id` when PK on non-`id` column | OPEN — adapter stores user keys in built-in `id` column (PR #24) |
+| 015 | DROP + CREATE resurrects old rows in retention window | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#139) — CREATE over a soft-deleted name hard-purges first |
+| 016 | `document_strict` 2nd INSERT collides on empty `id` when PK on non-`id` column | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#138) — doc id derived from declared PK; adapter id-column mapping (PR #24) kept as harmless convention |
 | 017 | `SHOW server_version` stuck at "NodeDB 0.1.0" | **RESOLVED** in v0.2.1 (upstream PR #114) |
 | 018 | Native protocol returns document-backed rows as a raw `{data,id}` blob (no virtual-column projection); pgwire unaffected | OPEN — `transport: native` only; no adapter workaround yet |
 | 019 | vquery pg_catalog evaluator rejects regclass casts, joins, `ANY(current_schemas)` and `pg_type.typelem` (post-`2330063a` 2026-05-23 upstream) | OPEN through v0.3.0 — re-probed 2026-06-07 against `25040fdf`; all four shapes still rejected by the in-process evaluator. Adapter bypass retained in `0.1.0.alpha.7+` |
-| 020 | `SHOW GRAPH STATS '<collection>'` returns all-zero counters even when the tenant-wide form proves the collection has edges (v0.3.0 release `25040fdf`) | OPEN through v0.3.0 — adapter's `NodeDB::Graph#graph_stats` falls back to the tenant-wide form + Ruby filter on `table_name` |
-| 021 | Reads against a `BITEMPORAL` collection return zero rows even when prior INSERTs reported success (every form of SELECT, plain / scoped / `AS OF SYSTEM TIME NOW()` / `AS OF SYSTEM TIME <ms>`) | OPEN through v0.3.0 — sample app's `AuditLog` demo exercises the migration only; no adapter workaround possible at the SQL layer |
-| 022 | Native protocol routes `SHOW <command>` (STATS / METRICS / MEMORY / ROLES) through the session-parameter handler instead of the DDL router, so every command returns a single `{"setting" => ""}` placeholder row. Pgwire is unaffected (v0.3.0 routed SHOW through DDL first) | OPEN through v0.3.0 — adapter `0.1.0.alpha.9+` detects the placeholder shape on native and returns `[]` instead |
+| 020 | `SHOW GRAPH STATS '<collection>'` returns all-zero counters even when the tenant-wide form proves the collection has edges | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#134) — scoped form matches tenant-wide, names bare in both; Ruby-filter removal pending (`chore/remove-bug020-workaround`) |
+| 021 | Reads against a `BITEMPORAL` collection return zero rows even when prior INSERTs reported success | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#135) — plain SELECT / count(*) / `AS OF SYSTEM TIME` all project correctly; no adapter workaround ever shipped |
+| 022 | Native protocol routes `SHOW <command>` (STATS / METRICS / MEMORY / ROLES) through the session-parameter handler instead of the DDL router | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#136) — native SHOW returns real row sets; adapter fail-soft removed in `chore/remove-bug022-workaround` |
 
 ## Transport parity (pgwire vs native) — track each release
 
@@ -69,7 +69,8 @@ release and update the `native` column. Target: full parity.
 | 014 | `NodedbAdapter#get_advisory_lock` / `#release_advisory_lock` no-op pair returning `true` (still needed — upstream returns empty, not boolean) |
 | 016 | `Nodedb::SchemaMigration` / `Nodedb::InternalMetadata` declare PK on the built-in `id` column |
 | 019 | `load_additional_types` no-op on every transport; `tables`, `primary_keys`, `pk_and_sequence_for`, `indexes`, `foreign_keys`, `check_constraints` use NodeDB-native paths on every transport (vquery refactor extends BUG-018-style gap to pgwire) |
-| 020 | `NodeDB::Graph#graph_stats` issues the tenant-wide `SHOW GRAPH STATS` and filters the result set in Ruby by stripping JSON quotes from `row["collection"]` and matching the model's `table_name` |
+| 020 | `NodeDB::Graph#graph_stats` issues the tenant-wide `SHOW GRAPH STATS` and filters the result set in Ruby (upstream fixed on `3a06321e`; removal pending as `chore/remove-bug020-workaround`) |
+| ~~022~~ | retired 2026-07-02 — native SHOW routes through the DDL router upstream; `show_command` forwards rows as-is |
 
 ## Workaround retirement strategy
 
@@ -93,6 +94,17 @@ release and update the `native` column. Target: full parity.
   fallback (JSON-expand `data` on native) is the contingency if upstream
   declines parity.
 
+- **022** workaround **retired** 2026-07-02 (upstream `3a06321e`,
+  NodeDB-Lab/nodedb#136): `show_command` no longer detects the native
+  placeholder shape; `native_show_placeholder?` deleted. The
+  native-transport specs assert real row sets for
+  `show_stats` / `show_metrics` / `show_memory` and a non-placeholder
+  shape for `show_roles`.
+- **016 / 020** upstream-fixed on `3a06321e` but their adapter code
+  still ships: the `SchemaMigration`/`InternalMetadata` id-column
+  mapping (016) is a harmless convention and stays; the
+  `NodeDB::Graph#graph_stats` Ruby filter (020) is pending removal as
+  `chore/remove-bug020-workaround`.
 - **010 / 013** workarounds **retired** on the 2026-05-18 upstream
   build: `text_match()` filters server-side and fuzzy mode returns a
   flat projection. `fts_search` simplified to

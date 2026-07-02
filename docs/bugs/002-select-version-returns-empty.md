@@ -1,9 +1,21 @@
 # BUG-002: SELECT version() returns empty string
 
-## Status: OPEN (retested 2026-05-10)
+## Status: RESOLVED (retested 2026-07-02 against upstream `3a06321e`)
 
-Still reproduces. `SELECT version()` returns an empty result.
-`SHOW server_version` continues to work and returns `NodeDB 0.1.0`.
+Fixed upstream in NodeDB-Lab/nodedb#142 (commits 15ae22e6 / e137985e /
+f9e21b3f). `SELECT version()` returns
+`PostgreSQL 15.0 (NodeDB) on x86_64`;
+`current_setting('server_version_num')` returns `150000`;
+`current_setting('server_version')` returns `NodeDB 0.3.0`.
+
+Note: `PQserverVersion()` still raises — that is BUG-003 (libpq parses
+the `server_version` ParameterStatus string, and `NodeDB 0.3.0` has a
+non-numeric prefix). Still open, tracked separately.
+
+### Earlier history (OPEN, retested 2026-05-10)
+
+`SELECT version()` returned an empty result. `SHOW server_version`
+continued to work and returned `NodeDB 0.1.0`.
 
 ## Summary
 

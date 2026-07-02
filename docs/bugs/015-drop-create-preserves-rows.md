@@ -1,6 +1,15 @@
 # BUG-015: DROP COLLECTION + CREATE COLLECTION resurrects old rows
 
-## Status: OPEN (2026-05-10)
+## Status: RESOLVED (retested 2026-07-02 against upstream `3a06321e`)
+
+Fixed upstream in NodeDB-Lab/nodedb#139 (commit c0a29495). CREATE of a
+soft-deleted name now synchronously hard-purges the old collection
+before registering the new one. Verified: no resurrected rows after
+DROP + CREATE, and re-inserting a previously-used key succeeds with no
+phantom PK conflict. `UNDROP` (without an intervening CREATE) is
+unaffected.
+
+### Earlier history (OPEN, 2026-05-10)
 
 NodeDB's `DROP COLLECTION name` soft-deletes the storage within a
 retention window. A subsequent `CREATE COLLECTION name (...)` of the

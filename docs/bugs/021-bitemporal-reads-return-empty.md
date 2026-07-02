@@ -2,6 +2,17 @@
 
 ## Status
 
+RESOLVED — retested 2026-07-02 against upstream `3a06321e`. Fixed
+upstream in NodeDB-Lab/nodedb#135 (commits 6548e7c7 / 7e3eb92b):
+bitemporal collections now route the default scan and streaming
+aggregates to the versioned current-state scan, and the pgwire
+projection parser strips the temporal clause so `AS OF SYSTEM TIME`
+reprojects into user columns. Verified: plain `SELECT`, `count(*)`,
+and `AS OF SYSTEM TIME NOW()` all return the projected row. No adapter
+workaround ever shipped (none was possible), so nothing to retire.
+
+### Earlier history
+
 OPEN upstream — observed 2026-06-07 against the **v0.3.0** release
 (commit `25040fdf`; `SHOW server_version` reports `NodeDB 0.3.0`).
 No adapter workaround possible; bitemporal collections are effectively

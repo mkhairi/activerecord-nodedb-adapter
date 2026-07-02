@@ -2,9 +2,24 @@
 
 ## Status
 
+RESOLVED — retested 2026-07-02 against upstream `3a06321e`. Fixed
+upstream in NodeDB-Lab/nodedb#136 (commit 751b9cc3): the native SQL
+dispatcher now runs the DDL/admin router before the session-variable
+fallback, mirroring the pgwire fix. Verified over native: `SHOW STATS`
+→ 22 `(name, value)` rows, `SHOW METRICS` → 26, `SHOW MEMORY` → 15
+per-engine rows, `SHOW ROLES` → real column set (empty on a fresh
+daemon, matching pgwire). Both retirement criteria below met.
+
+Adapter fail-soft (`show_command` placeholder detection +
+`native_show_placeholder?`) removed in
+`chore/remove-bug022-workaround`; the native-transport specs now
+assert real row sets.
+
+### Earlier history
+
 OPEN upstream — observed 2026-06-07 against the **v0.3.0** release
 (commit `25040fdf`; `SHOW server_version` reports `NodeDB 0.3.0`).
-Adapter `0.1.0.alpha.9+` returns `[]` from `show_stats`,
+Adapter `0.1.0.alpha.9+` returned `[]` from `show_stats`,
 `show_metrics`, `show_memory`, and `show_roles` over native instead
 of forwarding the placeholder row.
 
