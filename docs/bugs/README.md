@@ -37,6 +37,7 @@ type) — old data dirs make the daemon panic on boot; start fresh.
 | 022 | Native protocol routes `SHOW <command>` (STATS / METRICS / MEMORY / ROLES) through the session-parameter handler instead of the DDL router | **RESOLVED** upstream (`3a06321e`, NodeDB-Lab/nodedb#136) — native SHOW returns real row sets; adapter fail-soft removed in `chore/remove-bug022-workaround` |
 | 023 | MATCH `IN <collection>` ignores collection scope; plain DROP leaves edge-store entries visible to MATCH and `SHOW GRAPH STATS` | OPEN — discovered 2026-07-02 on `3a06321e`; MATCH exposure in the Graph concern on hold (#70) |
 | 024 | Bitemporal collections lose INSERT and DELETE committed inside explicit transactions (UPDATE unaffected) | OPEN — discovered 2026-07-02 on `3a06321e`; AR cannot write bitemporal collections; `NodeDB::Bitemporal` read helpers parked on `feat/bitemporal-read-helpers` (#72) |
+| 025 | Table-qualified column refs in WHERE silently match zero rows (except TEXT PK equality) — breaks every AR hash-condition on non-PK columns | OPEN — discovered 2026-07-02 on `3a06321e` while evaluating app-level bitemporality; adapter dequalification workaround to be prototyped (#74) |
 
 ## Transport parity (pgwire vs native) — track each release
 
