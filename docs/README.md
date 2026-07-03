@@ -1,7 +1,9 @@
 # activerecord-nodedb-adapter
 
-ActiveRecord adapter for [NodeDB](https://nodedb.dev) — a distributed multi-model database
-exposing 8 engines via PostgreSQL wire protocol.
+ActiveRecord adapter for [NodeDB](https://nodedb.dev) — a distributed
+multi-model database exposing document, vector, graph, timeseries,
+spatial, KV, FTS, columnar, and bitemporal storage via the PostgreSQL
+wire protocol.
 
 ## Quick Setup
 
@@ -48,6 +50,14 @@ docker run -d \
 | Spatial | `NodeDB::Spatial` | [spatial.md](spatial.md) |
 | Key-Value | `NodeDB::KV` | [kv.md](kv.md) |
 | Full-Text Search | `NodeDB::FullTextSearch` | [full_text_search.md](full_text_search.md) |
+| Columnar (analytics) | plain ActiveRecord | [columnar.md](columnar.md) |
+| Bitemporal (versioned rows) | plain ActiveRecord + raw autocommit writes | [bitemporal.md](bitemporal.md) |
+
+Upstream quirks and their status live in
+[`KNOWN_ISSUES.md`](KNOWN_ISSUES.md); operational helpers
+(`show_stats` / `show_metrics` / `show_memory` / `show_roles` /
+`show_tenant`) are documented in the main
+[README](../README.md#operational-helpers).
 
 ## Migrations
 
@@ -83,4 +93,6 @@ PostgreSQL-compatible DDL.
 
 - Ruby 3.2+
 - Rails 7.1+
-- NodeDB v0.1+ running with pgwire enabled (port 6432)
+- NodeDB running with pgwire enabled (port 6432) — **latest upstream
+  `main` recommended**; post-June builds changed the on-disk format, so
+  start daemons on a fresh data directory
