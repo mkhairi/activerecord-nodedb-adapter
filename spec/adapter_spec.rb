@@ -163,6 +163,11 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
       expect(rows.map(&:id)).to eq(["r1"])
     end
 
+    it "grouped calculations work (max_identifier_length is not queried from the server)" do
+      sums = DequalModel.group(:label).sum(:score).transform_values(&:to_f)
+      expect(sums).to eq("alpha" => 7.0, "beta" => 3.0)
+    end
+
     it "leaves JOIN statements untouched" do
       sql = %(SELECT "a"."x" FROM "a" JOIN "b" ON "a"."id" = "b"."a_id")
       expect(conn.send(:dequalify_single_table, sql)).to eq(sql)
