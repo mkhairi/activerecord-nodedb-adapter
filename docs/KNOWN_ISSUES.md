@@ -72,6 +72,10 @@ You write idiomatic AR; the adapter swallows the workaround:
   vanish. No adapter workaround; pick another name.
 - **`count(*)` on an empty document collection returns zero rows**
   instead of a single `0` row.
+- **`count(*)` never decrements after DELETE** (BUG-029): the first
+  count materializes a row counter that INSERTs maintain but DELETEs
+  don't, so counts drift upward permanently on previously-counted
+  collections. Assert cardinality via scans around delete operations.
 
 ## Open, no workaround
 

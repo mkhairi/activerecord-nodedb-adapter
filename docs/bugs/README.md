@@ -31,6 +31,7 @@ boot; start fresh.
 | 026 | User column named `bitemporal_id` on plain document_strict triggers BUG-024-style txn INSERT loss | OPEN — discovered 2026-07-02 on `3a06321e`; avoid the column name; blocks kufu-style app-level BTDM (#76) |
 | 027 | `CREATE COLLECTION` engine spellings diverge: `WITH (engine=...)` + BITEMPORAL builds a broken schema; `ENGINE =` suffix silently ignores the timeseries engine | OPEN — discovered 2026-07-02 on `3a06321e`; nodedb-ruby builder picks the spelling per flag (#83) |
 | 028 | DROP + CREATE of a BITEMPORAL collection resurrects the old versioned-store history (name poisoned until data-dir wipe) | OPEN — discovered 2026-07-02 on `3a06321e`; no client-side workaround (#85) |
+| 029 | `count(*)` materializes a row counter that DELETE never decrements — counts drift upward permanently on previously-counted collections | OPEN — isolated 2026-07-03 on `3a06321e`; assert cardinality via scans around deletes (#90) |
 
 ## Adapter workarounds currently shipped
 
