@@ -120,10 +120,26 @@ class SocialNode < ApplicationRecord
   include NodeDB::Graph
 end
 
-SocialNode.graph_insert_edge(from: "alice", to: "bob", type: "follows")
+SocialNode.graph_insert_edge(from: "alice", to: "bob", type: "follows",
+                             properties: { since: 2020 })
 SocialNode.graph_traverse(from: "alice", depth: 3)
 # => ["bob", "carol", ...]
+SocialNode.graph_delete_edge(from: "alice", to: "bob", type: "follows")
+
+# PageRank — pass personalization: to bias the seed vector
 SocialNode.graph_algo(:pagerank, damping: 0.85, iterations: 20)
+SocialNode.graph_algo(:pagerank, personalization: { "alice" => 1.0 })
+
+# Persistent O(1) edge-store counters, scoped to this model's collection
+SocialNode.graph_stats
+# => [{ "collection" => "social_nodes", "node_count" => "4",
+#       "edge_count" => "2", "distinct_label_count" => "1",
+#       "labels" => "[{\"count\":2,\"label\":\"follows\"}]" }]
+SocialNode.graph_stats(verbose: true)   # one row per (collection, label)
+SocialNode.graph_stats(as_of: 1.hour.ago.to_i * 1000)
+
+# Tenant-wide form via the connection helper
+ActiveRecord::Base.connection.graph_stats
 ```
 
 ### Timeseries
@@ -172,6 +188,83 @@ Post.fts_search("machine learning", limit: 20)
 Post.fts_search("nural networks", fuzzy: true)
 ```
 
+### Bitemporal collections
+
+NodeDB retains every committed version of each row in a `BITEMPORAL`
+collection. Current-state reads are plain ActiveRecord; time-travel
+reads use the `AS OF SYSTEM TIME` scan suffix (raw SQL — it doesn't
+compose with AR relations):
+
+```ruby
+# migration
+create_collection :audit_logs, engine: :document_strict, bitemporal: true do |t|
+  t.text :id, primary_key: true
+  t.text :actor
+  t.text :recorded_at
+end
+```
+
+```ruby
+AuditLog.where(actor: "alice")          # current state, plain AR
+
+conn = ActiveRecord::Base.connection
+conn.select_all("SELECT * FROM audit_logs AS OF SYSTEM TIME NULL").to_a
+# every committed version, each row carrying `_ts_system` (commit ms)
+conn.select_all("SELECT * FROM audit_logs AS OF SYSTEM TIME #{1.hour.ago.to_i * 1000}").to_a
+# rows current at that instant
+```
+
+**Write caveat (upstream BUG-024):** INSERT and DELETE committed inside
+explicit transactions are silently lost on bitemporal collections, and
+AR wraps every `create!`/`destroy` in one. Write with a validated raw
+autocommit INSERT instead:
+
+```ruby
+def self.record!(attrs)
+  log = new(attrs)
+  raise ActiveRecord::RecordInvalid, log unless log.valid?
+
+  cols   = %w[id actor recorded_at]
+  values = cols.map { |c| connection.quote(log.public_send(c)) }.join(", ")
+  connection.execute("INSERT INTO #{table_name} (#{cols.join(', ')}) VALUES (#{values})")
+  log
+end
+```
+
+Two more upstream sharp edges: don't DROP + CREATE a bitemporal
+collection under the same name (the old version history resurrects,
+BUG-028), and never name an ordinary column `bitemporal_id`
+(BUG-026). Details in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md).
+
+## Idiomatic querying
+
+Hash-conditions, conditional counts, and qualified projections work
+as-is — the adapter rewrites AR's table-qualified SQL on single-table
+statements before dispatch (NodeDB silently matches zero rows for
+qualified refs otherwise; see BUG-025 in the known issues):
+
+```ruby
+Article.where(title: "hello")             # works
+Article.where(score: 5..10).count         # works
+Article.find_by(title: "hello")           # works
+Article.where("score >= ?", 5)            # raw fragments: keep columns unqualified
+```
+
+## Operational helpers
+
+Server counters, memory budgets, roles, and tenant info over plain
+connection methods:
+
+```ruby
+conn = ActiveRecord::Base.connection
+conn.show_stats     # => [{ "name" => "queries_total", "value" => "42" }, ...]
+conn.show_metrics   # extended Prometheus-style counters
+conn.show_memory    # per-engine memory budget snapshot
+conn.show_roles     # defined roles
+conn.show_tenant(0) # current tenant snapshot
+conn.nodedb_version # => "0.3.0" (parsed from SHOW server_version)
+```
+
 ## Migrations
 
 ### Generic helper
@@ -214,20 +307,31 @@ create_collection :metrics, engine: :timeseries,
 ### Strict-schema collections
 
 For typed CRUD-style models, prefer the strict-schema engine (otherwise
-unknown columns are silently dropped):
+unknown columns are silently dropped). Block-form columns work with
+every helper:
 
 ```ruby
-execute <<~SQL
-  CREATE COLLECTION articles (
-    id    TEXT PRIMARY KEY,
-    title TEXT,
-    body  TEXT
-  ) WITH (engine='document_strict')
-SQL
+create_document_strict :articles do |t|
+  t.text    :id, primary_key: true
+  t.text    :title
+  t.text    :body
+  t.integer :score
+end
 ```
 
-A custom block-form `t.text` / `t.vector` / `t.geometry` DSL is on the
-roadmap; for now use raw `execute` for typed columns.
+Natural keys on non-`id` columns work on current upstream:
+
+```ruby
+create_collection :products, engine: :document_strict, id: false do |t|
+  t.text :sku, primary_key: true
+  t.text :label
+end
+```
+
+Notes: AR's `t.datetime` emits `TIMESTAMP(6)`, which NodeDB rejects —
+use `t.column :at, "TIMESTAMP"` for timestamp columns. Integer
+`SERIAL` primary keys don't exist (no sequences); use text/UUID keys
+with a `before_create { self.id ||= SecureRandom.uuid }`.
 
 ## Type casters
 
@@ -239,7 +343,10 @@ them through the right Ruby type:
 class Article < ApplicationRecord
   attribute :embedding, :vector       # Array<Float>     <-> "[0.1, 0.2, ...]"
   attribute :payload,   :json         # Hash / Array     <-> JSON string
-  attribute :geom,      :geometry     # WKT string passthrough (BUG-011 follow-up)
+  attribute :geom,      :geometry     # WKT string passthrough (write path
+                                      # works upstream via ST_GeomFromText /
+                                      # ST_MakePoint; read-side accessors
+                                      # still pending — see known issues)
 end
 
 Article.new(embedding: [0.1, 0.2, 0.3], payload: { source: "demo" })
@@ -283,11 +390,12 @@ connection_pool.schema_migration.versions
 Implementation notes:
 
 - `CREATE COLLECTION schema_migrations (id TEXT PRIMARY KEY) WITH (engine='document_strict')`
-- Lookup keys (versions, metadata keys) live in NodeDB's mandatory `id`
-  column; declaring a non-`id` PK triggers a duplicate-empty-id collision
-  on the second INSERT (NodeDB upstream quirk).
-- DELETE path uses the BUG-008 workaround so `db:rollback` actually
-  persists the version removal.
+- Lookup keys (versions, metadata keys) live in NodeDB's built-in `id`
+  column. (Historical: non-`id` PKs used to collide upstream; fixed on
+  current builds, the convention stays because it's harmless.)
+- DELETE path uses the BUG-008 workaround (re-issue outside the AR
+  transaction) so `db:rollback` never sees the stale point-lookup
+  phantom.
 
 ## Per-call session settings
 
