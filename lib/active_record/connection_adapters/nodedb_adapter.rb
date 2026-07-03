@@ -106,12 +106,13 @@ module ActiveRecord
         FALLBACK_DATABASE_VERSION
       end
 
-      # `SHOW max_identifier_length` is not answered over the native
-      # protocol; use PostgreSQL's default so identifier checks pass.
+      # NodeDB doesn't answer `SHOW max_identifier_length` on any
+      # transport — pgwire errors with "unrecognized configuration
+      # parameter", which crashes AR's grouped calculations
+      # (group(:x).sum(:y) calls this to build column aliases). Use
+      # PostgreSQL's default.
       def max_identifier_length
-        return 63 if native_transport?
-
-        super
+        63
       end
 
       # Suppress the minimum-version check entirely.
