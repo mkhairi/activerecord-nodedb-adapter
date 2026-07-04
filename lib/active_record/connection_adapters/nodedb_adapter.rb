@@ -10,6 +10,7 @@ require_relative "nodedb/internal_metadata"
 require_relative "nodedb/connection_pool_patch"
 require_relative "nodedb/native_pg_compat"
 require_relative "nodedb/session_settings"
+require_relative "nodedb/advisory_locks"
 require_relative "nodedb/type/vector"
 require_relative "nodedb/type/geometry"
 require_relative "nodedb/type/json"
@@ -53,6 +54,7 @@ module ActiveRecord
       include Nodedb::DatabaseStatements
       include Nodedb::SchemaStatements
       include Nodedb::SessionSettings
+      include Nodedb::AdvisoryLocks
 
       # NodeDB version string reported by SELECT version()
       NODEDB_VERSION_RE = /NodeDB\s+([\d.]+)/i
@@ -122,97 +124,8 @@ module ActiveRecord
         false
       end
 
-      # BUG-014: AR wraps `db:migrate` in an advisory lock to block
-      # concurrent migrations. NodeDB doesn't ship the
-      # `pg_try_advisory_lock` family and upstream closed it as won't-fix
-      # on the pgwire surface, so the mutex is implemented
-      # application-level: a document_strict lock collection whose TEXT
-      # PRIMARY KEY makes acquisition an atomic INSERT (a second insert
-      # of the same key fails the PK uniqueness constraint server-side).
-      #
-      # Semantics vs PostgreSQL advisory locks:
-      # - try-lock only (AR's migrator only needs try semantics);
-      # - NOT session-scoped — a crashed holder leaves the row behind.
-      #   Locks older than `advisory_lock_ttl` seconds (connection config,
-      #   default 3600) are treated as stale and stolen on acquire.
-      ADVISORY_LOCKS_COLLECTION = "ar_advisory_locks"
-      ADVISORY_LOCK_TTL = 3600
-      DUPLICATE_KEY_RE = /primary-key uniqueness|duplicate key/i
-
-      def get_advisory_lock(lock_id)
-        ensure_advisory_lock_collection
-        try_advisory_insert(lock_id) ||
-          (steal_stale_advisory_lock(lock_id) && try_advisory_insert(lock_id))
-      end
-
-      def release_advisory_lock(lock_id)
-        row = advisory_lock_row(lock_id)
-        return false if row && row["owner"] != advisory_lock_owner
-
-        execute(
-          "DELETE FROM #{ADVISORY_LOCKS_COLLECTION} " \
-          "WHERE id = #{quote(lock_id.to_s)} AND owner = #{quote(advisory_lock_owner)}"
-        )
-        true
-      end
-
-      private
-
-      # Per-adapter-instance identity; lets release/steal distinguish our
-      # lock from another process's.
-      def advisory_lock_owner
-        @advisory_lock_owner ||= SecureRandom.uuid
-      end
-
-      def try_advisory_insert(lock_id)
-        execute(
-          "INSERT INTO #{ADVISORY_LOCKS_COLLECTION} (id, owner, acquired_at) VALUES " \
-          "(#{quote(lock_id.to_s)}, #{quote(advisory_lock_owner)}, #{quote(Time.now.to_i.to_s)})"
-        )
-        true
-      rescue ActiveRecord::StatementInvalid => e
-        raise unless e.message.match?(DUPLICATE_KEY_RE)
-
-        false
-      end
-
-      def steal_stale_advisory_lock(lock_id)
-        row = advisory_lock_row(lock_id)
-        return false unless row
-
-        ttl = (@config[:advisory_lock_ttl] || ADVISORY_LOCK_TTL).to_i
-        return false unless Time.now.to_i - row["acquired_at"].to_i > ttl
-
-        # Compare-and-delete on the observed owner so a fresh reacquire
-        # by someone else between the read and the delete survives.
-        execute(
-          "DELETE FROM #{ADVISORY_LOCKS_COLLECTION} " \
-          "WHERE id = #{quote(lock_id.to_s)} AND owner = #{quote(row['owner'])}"
-        )
-        true
-      end
-
-      def advisory_lock_row(lock_id)
-        execute(
-          "SELECT owner, acquired_at FROM #{ADVISORY_LOCKS_COLLECTION} " \
-          "WHERE id = #{quote(lock_id.to_s)} LIMIT 1"
-        ).first
-      end
-
-      def ensure_advisory_lock_collection
-        return if collections.include?(ADVISORY_LOCKS_COLLECTION)
-
-        execute(
-          "CREATE COLLECTION #{ADVISORY_LOCKS_COLLECTION} " \
-          "(id TEXT PRIMARY KEY, owner TEXT, acquired_at TEXT) " \
-          "WITH (engine='document_strict')"
-        )
-      rescue ActiveRecord::StatementInvalid => e
-        # Another process won the create race.
-        raise unless e.message.include?("already exists")
-      end
-
-      public
+      # BUG-014 advisory locks (migrator contract + with_advisory_lock
+      # block API) live in Nodedb::AdvisoryLocks.
 
       # NodeDB BUG-008 (PARTIAL fix in v0.2.1): DELETE inside BEGIN;...COMMIT;
       # is silently dropped on commit when the target collection's primary key
