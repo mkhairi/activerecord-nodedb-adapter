@@ -168,6 +168,10 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
       expect(sums).to eq("alpha" => 7.0, "beta" => 3.0)
     end
 
+    it "grouped counts keep their group keys (BUG-030 alias re-mapping)" do
+      expect(DequalModel.group(:label).count).to eq("alpha" => 1, "beta" => 1)
+    end
+
     it "leaves JOIN statements untouched" do
       sql = %(SELECT "a"."x" FROM "a" JOIN "b" ON "a"."id" = "b"."a_id")
       expect(conn.send(:dequalify_single_table, sql)).to eq(sql)

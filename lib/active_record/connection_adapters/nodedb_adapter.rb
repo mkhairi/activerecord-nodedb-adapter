@@ -189,9 +189,51 @@ module ActiveRecord
       # bearing); AR never emits those against NodeDB's supported surface.
       # Remove when upstream resolves qualified-ref evaluation.
       def perform_query(raw_connection, sql, binds, type_casted_binds, **kwargs)
-        super(raw_connection, dequalify_single_table(sql), binds, type_casted_binds, **kwargs)
+        rewritten = dequalify_single_table(sql)
+        result = super(raw_connection, rewritten, binds, type_casted_binds, **kwargs)
+        realias_group_by_columns(rewritten, result)
       end
 
+      # NodeDB BUG-030: a GROUP BY result set drops the requested alias on
+      # plain-column select items (returning the base column name) and
+      # reorders columns group-keys-first. Aggregate aliases survive.
+      # ActiveRecord's grouped calculations (group(...).sum/count/...) read
+      # each group key by its alias, so every group collapses onto a nil
+      # key without this rename. Restore the aliases client-side by mapping
+      # the returned base column names back to the aliases the SELECT list
+      # asked for. Remove when upstream honours aliases in GROUP BY output.
+      def realias_group_by_columns(sql, result)
+        return result unless sql.is_a?(String) && sql.match?(GROUP_BY_SQL)
+
+        select_list = sql[/\ASELECT\s+(.+?)\s+FROM\b/im, 1]
+        return result unless select_list
+
+        # Bare `"column" AS "alias"` items only: an aggregate's closing
+        # paren sits between its quoted column and AS, so it never matches.
+        remap = select_list.scan(/"([^"]+)"\s+AS\s+"([^"]+)"/).to_h
+        remap.reject! { |base, aliaz| base == aliaz }
+        return result if remap.empty?
+
+        fields = result.fields
+        renamed = fields.map { |f| remap[f] && !fields.include?(remap[f]) ? remap[f] : f }
+        return result if renamed == fields
+
+        RealiasedResult.new(result, renamed)
+      end
+      private :realias_group_by_columns
+
+      # PG::Result's fields are immutable; expose the corrected names via a
+      # thin delegator (values/ftype/fmod/... pass through untouched).
+      class RealiasedResult < SimpleDelegator
+        def initialize(result, fields)
+          super(result)
+          @fields = fields
+        end
+
+        attr_reader :fields
+      end
+
+      GROUP_BY_SQL      = /\A\s*SELECT\b.*\bGROUP\s+BY\b/im
       DEQUALIFIABLE_SQL = /\A\s*(?:SELECT|UPDATE|DELETE)\b/i
       DEQUALIFY_SKIP    = /\bJOIN\b|\bFROM\s+"[^"]+"\s*(?:,|\s+AS\b)/i
 
