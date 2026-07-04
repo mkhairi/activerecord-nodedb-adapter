@@ -103,15 +103,18 @@ You write idiomatic AR; the adapter swallows the workaround:
   return empty and `ST_DWithin` rejects constructor arguments, so
   spatial predicates remain unusable (write path works; raw GeoJSON
   column reads work).
-- **BUG-031 — bitemporal versioned store freezes after a daemon
-  upgrade**: collections created on an earlier build accept writes but
-  never append post-upgrade versions to `AS OF SYSTEM TIME NULL`
-  history. Recreate the collection on the new build (BUG-028 ghosts
-  apply) or wipe the data dir. More broadly, `67c4572d` cannot decode
-  rows written by `3a06321e` — pre-upgrade document rows project
-  empty cells (`SELECT id, title` returns blanks while `count(*)`
-  still sees them). Treat the upgrade as a data-directory format
-  break: wipe and reseed.
+- **BUG-036 — document_strict rows lose ALL column data across a
+  daemon restart** (CRITICAL, `f8a4df44`): rows written by one daemon
+  process read back as empty cells in every column (including the PK)
+  after a graceful same-binary restart. `count(*)` and the PK
+  uniqueness index survive; KV data survives; only the document
+  projections are lost. Cascades into `rails db:migrate` crashing with
+  a duplicate-`environment` `PG::UniqueViolation` (empty
+  `schema_migrations` reads make AR re-run everything). No workaround:
+  treat every daemon restart as data loss for document collections —
+  wipe + `bin/setup` + reseed. Subsumes BUG-031 (the "upgrade decode
+  break" needed no upgrade, and its bitemporal history freeze is one
+  face of this).
 - **BUG-032 — databases created by `CREATE DATABASE` are unusable**:
   DDL writes home to the new database, but DESCRIBE / SELECT /
   SHOW COLLECTIONS resolve against the default database only, so
