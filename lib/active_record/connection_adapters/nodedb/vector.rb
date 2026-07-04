@@ -19,10 +19,12 @@ module NodeDB
         _vector_columns[name.to_sym] = { dim: dim, metric: metric }
       end
 
-      # Returns an Array of Hashes with keys "surrogate", "distance".
-      # NodeDB's SEARCH ... USING VECTOR() returns internal surrogate IDs +
-      # distances; it does not project document fields. Use surrogate IDs
-      # for subsequent lookups if document content is needed.
+      # Returns an Array of Hashes with keys "id", "surrogate", "distance".
+      # NodeDB's SEARCH ... USING VECTOR() projects `id`, `_surrogate`,
+      # and the computed `distance` as real result columns (identical over
+      # pgwire and native). Caveat: `id` is only the document id on
+      # vector-engine collections; on document collections with a vector
+      # index it is a result ordinal — don't treat it as a key there.
       # Note: SEARCH parser rejects quoted identifiers — bare names required.
       def search_vector(column, embedding, limit: 10, filter: nil)
         sql = NodeDB::SQL::Vector.search(
@@ -32,10 +34,12 @@ module NodeDB
           limit:     limit,
           filter:    filter
         )
-        raw = connection.select_all(sql)
-        raw.map do |row|
-          parsed = JSON.parse(row["result"])
-          { "surrogate" => parsed["_surrogate"], "distance" => parsed["distance"] }
+        connection.select_all(sql).map do |row|
+          {
+            "id"        => row["id"],
+            "surrogate" => row["_surrogate"] && Integer(row["_surrogate"]),
+            "distance"  => row["distance"]&.to_f
+          }
         end
       end
     end
