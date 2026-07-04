@@ -34,7 +34,7 @@ RSpec.describe NodeDB::Vector, :integration do
   it "finds nearest neighbours" do
     results = TestArticle.search_vector(:embedding, [0.1, 0.2, 0.3], limit: 1)
     expect(results.length).to eq(1)
-    expect(results.first).to include("surrogate", "distance")
+    expect(results.first).to include("id", "surrogate", "distance")
     expect(results.first["distance"]).to be_within(0.01).of(0.0)
   end
 
