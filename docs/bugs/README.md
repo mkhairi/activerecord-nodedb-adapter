@@ -35,6 +35,7 @@ earlier builds stop versioning (BUG-031).
 | 029 | `count(*)` materializes a row counter that DELETE never decrements — counts drift upward permanently on previously-counted collections | OPEN — isolated 2026-07-03 on `3a06321e`; assert cardinality via scans around deletes (#90) |
 | 030 | GROUP BY output drops group-key column aliases, reorders columns group-keys-first; unaliased aggregates return empty cells | OPEN — regression discovered 2026-07-04 on `67c4572d`; adapter re-aliases GROUP BY result columns in `perform_query` |
 | 031 | Bitemporal versioned store stops recording after a daemon upgrade (pre-upgrade collections accept writes but append no history) | OPEN — discovered 2026-07-04 on `67c4572d`; no client-side workaround; recreate the collection (BUG-028 ghosts apply) or wipe the data dir |
+| 032 | Databases created by `CREATE DATABASE` are unusable — DDL writes home to the new database but catalog reads (DESCRIBE / SELECT / SHOW COLLECTIONS) resolve against the default database only | OPEN — regression discovered 2026-07-04 on `67c4572d`; spec suite targets the default database until multi-database works again |
 
 ## Adapter workarounds currently shipped
 

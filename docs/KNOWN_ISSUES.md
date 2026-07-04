@@ -109,7 +109,16 @@ You write idiomatic AR; the adapter swallows the workaround:
   upgrade**: collections created on an earlier build accept writes but
   never append post-upgrade versions to `AS OF SYSTEM TIME NULL`
   history. Recreate the collection on the new build (BUG-028 ghosts
-  apply) or wipe the data dir.
+  apply) or wipe the data dir. More broadly, `67c4572d` cannot decode
+  rows written by `3a06321e` — pre-upgrade document rows project
+  empty cells (`SELECT id, title` returns blanks while `count(*)`
+  still sees them). Treat the upgrade as a data-directory format
+  break: wipe and reseed.
+- **BUG-032 — databases created by `CREATE DATABASE` are unusable**:
+  DDL writes home to the new database, but DESCRIBE / SELECT /
+  SHOW COLLECTIONS resolve against the default database only, so
+  every collection created there is unreachable. Stick to the default
+  database (the spec suite now does).
 - **BUG-028 — DROP + CREATE of a bitemporal collection resurrects the
   old versioned-store history** (and a stale plain row) under the same
   name. Retested 2026-07-04, still present.
