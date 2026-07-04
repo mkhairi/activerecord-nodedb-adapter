@@ -11,8 +11,9 @@ ActiveRecord adapter for NodeDB. Extends
 `ActiveRecord::ConnectionAdapters::PostgreSQLAdapter` and adds NodeDB
 engine-aware DDL/DML, type casters, model concerns
 (`NodeDB::Vector`, `Graph`, `Timeseries`, `Spatial`, `KV`,
-`FullTextSearch`), and NodeDB-aware `SchemaMigration` /
-`InternalMetadata` so `rails db:migrate` works.
+`FullTextSearch`, `Bitemporal`), collection-based advisory locks
+(migration mutex + `with_advisory_lock` block API), and NodeDB-aware
+`SchemaMigration` / `InternalMetadata` so `rails db:migrate` works.
 
 Sits on top of `nodedb-ruby` (path-checked-out locally; github: gem in
 downstream apps).
@@ -26,10 +27,16 @@ bundle exec rspec
 ```
 
 Requires a live NodeDB on `localhost:6432` (and `:6433` for the native
-transport specs). 32 examples currently; must stay 0 failures, 0 pending
-before any PR merges. New behaviour
-requires a spec; new NodeDB workaround requires a spec that asserts
-the workaround's effect (not just "doesn't crash").
+transport specs); the suite targets the **default `nodedb` database**
+(CREATE DATABASE'd databases are unusable upstream — BUG-032;
+`NODEDB_URL` overrides). Must stay 0 failures, 0 pending before any PR
+merges. New behaviour requires a spec; new NodeDB workaround requires
+a spec that asserts the workaround's effect (not just "doesn't
+crash").
+
+Bug records live on the issue tracker (`[upstream:NodeDB] BUG-NNN` —
+see the root CLAUDE.md lifecycle). `docs/bugs/` is gitignored local
+scratch; `docs/KNOWN_ISSUES.md` is the user-facing rollup.
 
 For a full-stack smoke that touches every engine end-to-end, run the
 sample app's feature smoke. The sample app lives at
