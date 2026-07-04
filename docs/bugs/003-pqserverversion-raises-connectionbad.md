@@ -1,6 +1,15 @@
 # BUG-003: PQserverVersion() raises PG::ConnectionBad
 
-## Status: OPEN (retested 2026-07-02 against upstream `3a06321e`)
+## Status: OPEN (retested 2026-07-04 against upstream `f8a4df44`)
+
+Re-verified after upstream shipped the version-reporting hotfix
+(`version()` scalar, `server_version_num` in session state and the
+startup ParameterStatus burst) and declared this fixed:
+`PQserverVersion()` still raises. The hotfix's parameter is advertised
+but libpq never consults it — the analysis below (2026-07-02) holds
+verbatim. The adapter workaround stays. A libpq-visible fix needs the
+`server_version` ParameterStatus itself to carry a leading-numeric
+value (e.g. `15.0 (NodeDB 0.3.0)`).
 
 Still reproduces, root cause now narrowed. The current upstream build
 advertises `server_version_num` in the startup ParameterStatus burst
