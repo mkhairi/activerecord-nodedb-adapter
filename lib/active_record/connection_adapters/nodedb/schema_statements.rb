@@ -15,12 +15,9 @@ module ActiveRecord
         # the column-list parens. The collection then tracks valid-time
         # and system-time intervals; query the live version with the
         # default SELECT or a historical view with
-        # `SELECT ... AS OF SYSTEM TIME <ms>`. Note: v0.3.0's bitemporal
-        # SELECT path still emits document rows in the raw `{data,id}`
-        # blob shape (BUG-018 territory) over both pgwire and native, so
-        # the AR Relation experience is currently degraded — use it
-        # behind a Ruby unwrap or wait for upstream to land virtual-column
-        # projection on bitemporal collections.
+        # `SELECT ... AS OF SYSTEM TIME <ms>`. Bitemporal SELECTs project
+        # real columns on both transports (plain reads compose with AR
+        # Relations; AS OF history scans come back as hashes).
         #
         # Example:
         #   create_collection :articles do |t|

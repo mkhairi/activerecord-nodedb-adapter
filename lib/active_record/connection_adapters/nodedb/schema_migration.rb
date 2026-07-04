@@ -29,9 +29,8 @@ module ActiveRecord
           end
         end
 
-        # `NativePGCompat::Result` expands the native document blob back
-        # into real columns (BUG-018, #45), so `SELECT id` yields the
-        # stored version on both transports.
+        # Full scans project logical columns on both transports, so
+        # `SELECT id` yields the stored version everywhere.
         def versions
           @pool.with_connection do |connection|
             connection.execute("SELECT id FROM #{table_name} ORDER BY id ASC").to_a.map { |r| r["id"] }

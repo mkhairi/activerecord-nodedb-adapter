@@ -1,5 +1,4 @@
 require "pg"
-require "json"
 
 module ActiveRecord
   module ConnectionAdapters
@@ -20,63 +19,15 @@ module ActiveRecord
 
           TEXT_OID = 25
 
-          # BUG-018 (#45): over native, an *unfiltered* full scan of a
-          # document-backed collection comes back as a 2-column
-          # `{data, id}` blob — `data` is the row as a JSON string, `id`
-          # is an internal surrogate. (Point-lookups `WHERE id = …`
-          # already project real columns.) Expand the blob back into the
-          # logical columns so model collection reads work over native.
-          # pgwire never produces this shape, so it is a native-only path.
+          # Native results project the plan's declared columns the same
+          # way pgwire does (upstream response-shaping rework — BUG-018
+          # resolved), so the wrapper is a straight shape adapter with no
+          # blob normalisation.
           def initialize(native_result)
-            cols = native_result.fields
-            rows = native_result.values
+            @columns    = native_result.fields
+            @rows       = native_result.values
             @cmd_tuples = native_result.cmd_tuples
-            @columns, @rows = expand_document_blob(cols, rows) || [cols, rows]
           end
-
-          # Native document reads come back in two non-projected shapes:
-          #   A) ["data","id"] — one row per record, `data` = row JSON,
-          #      `id` = internal surrogate (populated full scan).
-          #   B) ["result"]   — a single cell whose value is a JSON array
-          #      of row objects (`"[]"` when the collection is empty).
-          # Both are normalised to real columns; an empty result becomes a
-          # genuinely empty set (no phantom row → no MissingAttributeError).
-          private def expand_document_blob(cols, rows)
-            if cols.length == 2 && cols.include?("data") && cols.include?("id")
-              return nil if rows.empty?
-
-              di = cols.index("data")
-              objs = rows.map do |r|
-                h = JSON.parse(r[di].to_s) rescue nil
-                return nil unless h.is_a?(Hash)
-
-                h
-              end
-              return rows_from_objects(objs)
-            end
-
-            if cols == ["result"] && rows.length == 1
-              v = JSON.parse(rows[0][0].to_s) rescue :unparsed
-              return [[], []] if v == []
-              return rows_from_objects(v) if v.is_a?(Array) && v.all? { |e| e.is_a?(Hash) }
-
-              # GRAPH TRAVERSE / GRAPH ALGO emit a single `result` cell whose
-              # value is a `{"nodes":[...],"edges":[...]}` object — a graph
-              # payload, not a document row. Leave it untouched so
-              # NodeDB::Graph#graph_traverse can fetch and unwrap "result".
-              return nil if v.is_a?(Hash) && (v.key?("nodes") || v.key?("edges"))
-
-              return rows_from_objects([v]) if v.is_a?(Hash)
-            end
-
-            nil
-          end
-
-          private def rows_from_objects(objs)
-            keys = objs.flat_map(&:keys).uniq
-            [keys, objs.map { |h| keys.map { |k| h[k] } }]
-          end
-          public
 
           def fields = @columns
           def values = @rows

@@ -6,9 +6,12 @@ users. Per-bug reproductions and workaround details live in
 only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
-Last retested: **2026-07-02** against upstream `main` at `3a06321e`
-(post-v0.3.0). Note: that build changed the on-disk format — daemons
-booted on pre-June data directories panic at startup; start fresh.
+Last retested: **2026-07-04** against upstream `main` at `67c4572d`
+(post-v0.3.0). That build reworked response shaping onto a
+protocol-neutral core: the native transport is now at result-shape
+parity with pgwire (BUG-018 resolved), but GROUP BY output regressed
+(BUG-030) and pre-upgrade bitemporal collections stop versioning
+(BUG-031).
 
 ## Adapter compensates transparently
 
@@ -22,6 +25,12 @@ You write idiomatic AR; the adapter swallows the workaround:
   SELECT/UPDATE/DELETE before dispatch (JOINs and aliased FROMs are
   left untouched). This also fixes qualified projections
   (`SELECT "articles".*`).
+- **BUG-030 — GROUP BY output drops group-key column aliases** (and
+  reorders columns group-keys-first), which collapses every AR grouped
+  calculation (`group(...).sum/count`) onto a `nil` key. The adapter
+  renames the returned base column names back to the aliases the
+  SELECT list requested. Unaliased aggregates in hand-written GROUP BY
+  SQL still return empty cells — alias them.
 - **BUG-008 — stale PK point-lookup after transactional DELETE.** The
   committed DELETE persists, but `WHERE pk = ...` keeps returning a
   phantom of the deleted row until the key is rewritten. The
@@ -60,12 +69,11 @@ You write idiomatic AR; the adapter swallows the workaround:
 
 ## Requires user awareness
 
-- **`SELECT *` on schemaless document collections** returns
-  `{"result" => "<json>"}` instead of flat columns. Project explicit
-  columns or use `document_strict`.
 - **`SEARCH` cannot be wrapped in subqueries** (`IN (SEARCH ...)`,
   `FROM (SEARCH ...)` fail to parse). The `Vector` concern returns
-  surrogate + distance; do a follow-up `find`.
+  id + surrogate + distance; note the `id` column is only the document
+  id on vector-engine collections (a result ordinal elsewhere), so do
+  a follow-up `find` where you need the record.
 - **Do not name a column `bitemporal_id`** (BUG-026): on a plain
   `document_strict` collection that column name silently routes writes
   into bitemporal machinery — INSERTs committed inside transactions
@@ -76,6 +84,10 @@ You write idiomatic AR; the adapter swallows the workaround:
   count materializes a row counter that INSERTs maintain but DELETEs
   don't, so counts drift upward permanently on previously-counted
   collections. Assert cardinality via scans around delete operations.
+- **`transport: native` is at result-shape parity with pgwire** since
+  BUG-018 was fixed upstream, but pgwire remains the primary,
+  default transport — the hand-rolled native client will be replaced
+  by NodeDB's official SDK once one ships.
 
 ## Open, no workaround
 
@@ -93,10 +105,14 @@ You write idiomatic AR; the adapter swallows the workaround:
   return empty and `ST_DWithin` rejects constructor arguments, so
   spatial predicates remain unusable (write path works; raw GeoJSON
   column reads work).
-- **BUG-018 — native transport shapes** (document full-scan fragments,
-  KV `value` missing, vector `distance` nil). Native-transport work is
-  **on hold** — the plan is to adopt the official NodeDB client SDK
-  after an official release; pgwire remains the primary transport.
+- **BUG-031 — bitemporal versioned store freezes after a daemon
+  upgrade**: collections created on an earlier build accept writes but
+  never append post-upgrade versions to `AS OF SYSTEM TIME NULL`
+  history. Recreate the collection on the new build (BUG-028 ghosts
+  apply) or wipe the data dir.
+- **BUG-028 — DROP + CREATE of a bitemporal collection resurrects the
+  old versioned-store history** (and a stale plain row) under the same
+  name. Retested 2026-07-04, still present.
 - **`ROLLBACK AND CHAIN` unsupported** — surfaces when AR retries a
   failed nested transaction. A translation shim (`ROLLBACK; BEGIN`) is
   a possible future adapter addition.
