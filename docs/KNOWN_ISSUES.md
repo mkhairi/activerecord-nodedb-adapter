@@ -6,12 +6,15 @@ users. Per-bug reproductions and workaround details live in
 only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
-Last retested: **2026-07-04** against upstream `main` at `67c4572d`
-(post-v0.3.0). That build reworked response shaping onto a
-protocol-neutral core: the native transport is now at result-shape
-parity with pgwire (BUG-018 resolved), but GROUP BY output regressed
-(BUG-030) and pre-upgrade bitemporal collections stop versioning
-(BUG-031).
+Last retested: **2026-07-04** against upstream `main` at `f8a4df44`
+(post-v0.3.0). That head's transactional DELETE/PUT rework resolved
+BUG-008 (txn DELETE phantom), BUG-024 (bitemporal txn write loss —
+ActiveRecord can write bitemporal collections now), and BUG-026
+(`bitemporal_id` column name), but introduced BUG-033 (negative
+point-lookup cache poisoning). The same day's `67c4572d`
+response-shaping rework brought the native transport to result-shape
+parity with pgwire (BUG-018 resolved) while regressing GROUP BY output
+(BUG-030) and multi-database catalog reads (BUG-032).
 
 ## Adapter compensates transparently
 
@@ -31,12 +34,6 @@ You write idiomatic AR; the adapter swallows the workaround:
   renames the returned base column names back to the aliases the
   SELECT list requested. Unaliased aggregates in hand-written GROUP BY
   SQL still return empty cells — alias them.
-- **BUG-008 — stale PK point-lookup after transactional DELETE.** The
-  committed DELETE persists, but `WHERE pk = ...` keeps returning a
-  phantom of the deleted row until the key is rewritten. The
-  `exec_delete` override re-issues the DELETE outside the AR-opened
-  transaction (the clean autocommit path), so `record.destroy` +
-  `find` never sees the phantom. Reported upstream 2026-07-02.
 - **BUG-003 — `PQserverVersion()` raises.** libpq can't parse the
   `server_version` ParameterStatus (`NodeDB 0.3.0`). The adapter asks
   the server via `current_setting('server_version_num')` (fallback
@@ -82,10 +79,6 @@ You write idiomatic AR; the adapter swallows the workaround:
   id + surrogate + distance; note the `id` column is only the document
   id on vector-engine collections (a result ordinal elsewhere), so do
   a follow-up `find` where you need the record.
-- **Do not name a column `bitemporal_id`** (BUG-026): on a plain
-  `document_strict` collection that column name silently routes writes
-  into bitemporal machinery — INSERTs committed inside transactions
-  vanish. No adapter workaround; pick another name.
 - **`count(*)` on an empty document collection returns zero rows**
   instead of a single `0` row.
 - **`count(*)` never decrements after DELETE** (BUG-029): the first
@@ -103,12 +96,6 @@ You write idiomatic AR; the adapter swallows the workaround:
   plain DROP leaves edge-store entries visible to MATCH and
   `SHOW GRAPH STATS`. MATCH exposure in the `Graph` concern is on
   hold until scoping works.
-- **BUG-024 — bitemporal collections lose INSERT and DELETE committed
-  inside explicit transactions** (UPDATE persists). ActiveRecord wraps
-  every `create!`/`destroy` in a transaction, so bitemporal
-  collections are effectively unwritable through AR. The
-  `NodeDB::Bitemporal` read helpers are parked on an unmerged branch
-  until this lands.
 - **Spatial read-side accessors** — `ST_AsText` / `ST_X` / `ST_Y`
   return empty and `ST_DWithin` rejects constructor arguments, so
   spatial predicates remain unusable (write path works; raw GeoJSON
@@ -136,6 +123,11 @@ You write idiomatic AR; the adapter swallows the workaround:
   `find_or_create_by` + reload. No general adapter workaround — avoid
   re-reading a just-created key by bare PK equality on the same
   connection, or add any second predicate.
+- **BUG-034 — transient auth failures under connection churn**: bursts
+  of rapid fresh connections get `FATAL: Password authentication
+  failed` with correct credentials; self-recovers in ~1s, nothing
+  logged. Pooled long-lived connections (normal Rails operation) are
+  unaffected; scripted one-psql-per-statement workloads should retry.
 - **BUG-028 — DROP + CREATE of a bitemporal collection resurrects the
   old versioned-store history** (and a stale plain row) under the same
   name. Retested 2026-07-04, still present.

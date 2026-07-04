@@ -5,8 +5,7 @@ require "securerandom"
 # End-to-end: drive ActiveRecord over the NodeDB native binary protocol
 # (transport: native) instead of pgwire, using the same document_strict
 # collection pattern the pgwire specs use. Exercises connect, schema,
-# model CRUD and the BUG-008 destroy path (which calls async_exec on the
-# raw connection — here the native shim).
+# model CRUD and the destroy path.
 RSpec.describe "ActiveRecord over transport: native", :integration do
   def native_up?
     Socket.tcp("localhost", 6433, connect_timeout: 1) { true }
@@ -71,7 +70,7 @@ RSpec.describe "ActiveRecord over transport: native", :integration do
     expect(NativeWidget.find("b1").score).to eq(99)
   end
 
-  it "DESTROYs a model (BUG-008 async_exec path over the native shim)" do
+  it "DESTROYs a model over the native shim" do
     NativeWidget.create!(id: "c1", name: "gamma", score: 3)
     NativeWidget.find("c1").destroy
     expect(NativeWidget.where(id: "c1").to_a).to be_empty

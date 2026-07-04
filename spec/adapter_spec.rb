@@ -183,7 +183,11 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
     end
   end
 
-  describe "record.destroy under NodeDB BUG-008 (PARTIAL fix in v0.2.1)", :integration do
+  # BUG-008 regression guard: transactional DELETE was silently dropped
+  # (later: left a PK point-lookup phantom) on collections with an
+  # explicit NOT NULL PRIMARY KEY -- exactly what AR emits. Fixed
+  # upstream; destroy() must keep persisting with no adapter override.
+  describe "record.destroy (BUG-008 regression guard)", :integration do
     let(:name) { "txn_delete_#{SecureRandom.hex(4)}" }
 
     before do
@@ -204,10 +208,12 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
 
     after { conn.drop_collection(name, if_exists: true) }
 
-    it "exec_delete override persists destroy() despite 'NOT NULL PRIMARY KEY' triggering BUG-008" do
+    it "persists destroy() on a NOT NULL PRIMARY KEY collection" do
       TxnDeleteModel.find("row1").destroy
 
       expect(TxnDeleteModel.where(id: "row1").to_a).to be_empty
+      # Point-lookup must not serve a phantom of the deleted row.
+      expect(conn.select_all("SELECT id FROM #{name} WHERE id = 'row1'").to_a).to be_empty
     end
   end
 end
