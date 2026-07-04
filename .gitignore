@@ -19,3 +19,7 @@ test/version_tmp/
 tmp/
 vendor/bundle
 vendor/cache
+
+# Local-only bug scratch log; canonical records live in GitHub issues
+# (titles: "[upstream:NodeDB] BUG-NNN").
+docs/bugs/
