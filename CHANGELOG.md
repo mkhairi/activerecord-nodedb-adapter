@@ -8,6 +8,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.9] — 2026-07-04
+
+Tracks NodeDB upstream `main` at `f8a4df44` (post-v0.3.0). Two upstream
+reworks landed this cycle: protocol-neutral response shaping (native
+transport now at result-shape parity with pgwire) and transactional
+DELETE/PUT via a shared point-write core (bitemporal collections
+writable through ActiveRecord).
+
+### Added
+
+- `NodeDB::Bitemporal` concern — `as_of(time)`, `versions`,
+  `history(pk)` over the `AS OF SYSTEM TIME` read surface (#104).
+- Application-level advisory locks (upstream closed the
+  `pg_advisory_lock` family as won't-fix): `ar_advisory_locks`
+  collection mutex with atomic PK-INSERT acquisition, owner-checked
+  release, and TTL stale-steal (`advisory_lock_ttl` config, default
+  3600 s) — cross-process `db:migrate` safety restored (#99). Block
+  API on top: `with_advisory_lock` / `with_advisory_lock!` with
+  ensure-release, `timeout_seconds` polling, thread-local reentrancy,
+  `advisory_lock_exists?`, and `NODEDB_ADVISORY_LOCK_PREFIX`
+  namespacing (#100).
+
+### Fixed
+
+- `Vector#search_vector` consumes the projected
+  `id`/`_surrogate`/`distance` SEARCH columns (upstream removed the
+  single `result` JSON-blob cell); results now expose `"id"` (#92).
+- GROUP BY calculations: upstream drops group-key column aliases
+  (BUG-030), collapsing `group(...).sum/count` onto a `nil` key — the
+  adapter re-aliases result columns from the SELECT list (#93).
+- `max_identifier_length` no longer queried from the server (#88).
+- `database_version` derived from `current_setting('server_version_num')`
+  (#71); single-table WHERE dequalification for BUG-025 (#77).
+
+### Removed
+
+- BUG-018 native document-blob normaliser (`expand_document_blob`) —
+  native results project real columns upstream (#94).
+- BUG-008 `exec_delete` autocommit re-issue — transactional DELETE
+  persists with no PK phantom upstream (#102).
+- BUG-020 tenant-wide graph_stats fallback (#81); BUG-022 ops-helper
+  fail-soft (#68).
+
+### Documentation
+
+- Bug log tracks the latest upstream only; resolved docs pruned
+  (008, 018, 024, 026 this cycle). New: BUG-027/028/029/030/031/032/033/034
+  with raw reproductions; per-engine guides refreshed, bitemporal +
+  columnar guides added; Known issues moved to `docs/KNOWN_ISSUES.md`.
+
 ## [0.1.0.alpha.8] — 2026-06-07
 
 NodeDB v0.3.0 (commit `25040fdf`) compatibility release. Surfaces the
