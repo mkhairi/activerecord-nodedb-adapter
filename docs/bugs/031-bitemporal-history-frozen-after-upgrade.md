@@ -2,6 +2,18 @@
 
 ## Status: OPEN (2026-07-04) — upstream `67c4572d` (v0.3.0 main head)
 
+## Broader context (added 2026-07-04, same day)
+
+Further probing showed this is one face of a general on-disk
+compatibility break: `67c4572d` cannot decode rows written by
+`3a06321e` on ANY document engine. Pre-upgrade `document_strict` rows
+project empty cells (`SELECT id, title` returns blanks; `count(*)`
+still counts them; `SELECT *` can surface a `{id, data}` storage
+tuple with garbage). `schema_migrations` reads empty, so ActiveRecord
+believes no migrations ran. Treat the `3a06321e` → `67c4572d` upgrade
+as a data-directory format break: wipe and reseed (local dir backed up
+at `~/.local/share/nodedb.bak-20260704`).
+
 ## Summary
 
 A BITEMPORAL collection created on an earlier build (`3a06321e`,

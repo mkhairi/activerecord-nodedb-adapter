@@ -4,7 +4,11 @@ require "activerecord-nodedb-adapter"
 
 module NodedbHelper
   SUPERUSER_PASSWORD = File.read(File.expand_path("~/.local/share/nodedb/.superuser_password")).strip rescue nil
-  NODEDB_URL = ENV.fetch("NODEDB_URL", "postgres://nodedb:#{SUPERUSER_PASSWORD}@localhost:6432/nodedb_test")
+  # Default database, not a dedicated test one: databases created by
+  # CREATE DATABASE are unusable on current upstream (BUG-032 — catalog
+  # reads ignore the session database), and every spec already isolates
+  # itself with a random-suffixed collection it drops afterwards.
+  NODEDB_URL = ENV.fetch("NODEDB_URL", "postgres://nodedb:#{SUPERUSER_PASSWORD}@localhost:6432/nodedb")
 
 
   def self.connect!
