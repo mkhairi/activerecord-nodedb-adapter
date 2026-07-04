@@ -25,7 +25,7 @@ regressing GROUP BY output (BUG-030) and multi-database catalog reads
 
 | ID  | Title | Status |
 | --- | ----- | ------ |
-| 003 | `PQserverVersion()` raises `PG::ConnectionBad` | OPEN (retested `3a06321e`) — libpq parses the `server_version` ParameterStatus only, and `"NodeDB 0.3.0"` is non-numeric; the `server_version_num` param the upstream build advertises is ignored by libpq. Adapter derives the version via `current_setting` instead |
+| 003 | `PQserverVersion()` raises `PG::ConnectionBad` | OPEN (retested `f8a4df44` after the upstream version-reporting hotfix) — libpq parses the `server_version` ParameterStatus only, and `"NodeDB 0.3.0"` is non-numeric; the advertised `server_version_num` param is ignored by libpq. Adapter derives the version via `current_setting` instead; needs `server_version` itself to lead with digits |
 | 007 | `pg_attribute` query returns duplicate `id` row; `pg_attrdef` vtable missing | OPEN — adapter bypasses via `DESCRIBE` |
 | 014 | `pg_try_advisory_lock` / `pg_advisory_unlock` missing | CLOSED upstream won't-fix (2026-07-04) — adapter implements the migration mutex application-level via the `ar_advisory_locks` collection (atomic PK INSERT, owner-checked release, TTL stale steal) |
 | 019 | vquery pg_catalog evaluator narrow shapes | OPEN, improved (`3a06321e`) — joins + `typelem` work, but `current_schemas()` returns an empty cell (breaks AR `tables`) and `pg_range`/`pg_attrdef` vtables are missing (breaks `load_additional_types` / `column_definitions`). All bypasses stay |
