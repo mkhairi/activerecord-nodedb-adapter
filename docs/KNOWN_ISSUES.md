@@ -48,11 +48,15 @@ You write idiomatic AR; the adapter swallows the workaround:
   as written. The adapter routes schema reflection through
   NodeDB-native paths (SHOW COLLECTIONS / DESCRIBE) and no-ops
   `load_additional_types`.
-- **BUG-014 — advisory locks return empty rows** (upstream won't-fix
-  on the pgwire surface). Adapter ships no-op
-  `get_advisory_lock` / `release_advisory_lock` stubs so
-  `db:migrate` works; cross-process migration mutex semantics are
-  lost (acceptable single-instance alpha trade-off).
+- **BUG-014 — advisory locks missing** (upstream closed won't-fix on
+  the pgwire surface, 2026-07-04). The adapter implements the
+  migration mutex application-level: an `ar_advisory_locks`
+  `document_strict` collection whose TEXT PRIMARY KEY makes
+  acquisition an atomic INSERT. Cross-process `db:migrate` safety is
+  restored (concurrent runs raise `ConcurrentMigrationError`).
+  Caveats: try-lock only, not session-scoped — a crashed holder's
+  lock is stolen after `advisory_lock_ttl` seconds (config, default
+  3600).
 - **Edge-store keys track the IN-clause spelling verbatim** — a
   double-quoted identifier in `GRAPH INSERT EDGE IN "name"` stores a
   literal-quoted key that scoped `SHOW GRAPH STATS` lookups miss. The
