@@ -24,7 +24,7 @@ earlier builds stop versioning (BUG-031).
 | 003 | `PQserverVersion()` raises `PG::ConnectionBad` | OPEN (retested `3a06321e`) — libpq parses the `server_version` ParameterStatus only, and `"NodeDB 0.3.0"` is non-numeric; the `server_version_num` param the upstream build advertises is ignored by libpq. Adapter derives the version via `current_setting` instead |
 | 007 | `pg_attribute` query returns duplicate `id` row; `pg_attrdef` vtable missing | OPEN — adapter bypasses via `DESCRIBE` |
 | 008 | Transactional DELETE leaves stale PK point-lookup phantom | RESHAPED on `3a06321e` — txn DELETE persists (scans clean, all PK forms), but `WHERE pk = ...` serves a phantom of the deleted row until the key is re-inserted. Reported upstream 2026-07-02. `exec_delete` workaround stays (autocommit re-issue avoids the phantom) |
-| 014 | `pg_try_advisory_lock` / `pg_advisory_unlock` return zero rows (not boolean) | Upstream won't-fix on the pgwire surface; adapter no-op stubs are permanent until a native coordination primitive exists |
+| 014 | `pg_try_advisory_lock` / `pg_advisory_unlock` missing | CLOSED upstream won't-fix (2026-07-04) — adapter implements the migration mutex application-level via the `ar_advisory_locks` collection (atomic PK INSERT, owner-checked release, TTL stale steal) |
 | 019 | vquery pg_catalog evaluator narrow shapes | OPEN, improved (`3a06321e`) — joins + `typelem` work, but `current_schemas()` returns an empty cell (breaks AR `tables`) and `pg_range`/`pg_attrdef` vtables are missing (breaks `load_additional_types` / `column_definitions`). All bypasses stay |
 | 023 | MATCH `IN <collection>` ignores collection scope; plain DROP leaves edge-store entries visible to MATCH and `SHOW GRAPH STATS` | OPEN — discovered 2026-07-02 on `3a06321e`; MATCH exposure in the Graph concern on hold (#70) |
 | 024 | Bitemporal collections lose INSERT and DELETE committed inside explicit transactions (UPDATE unaffected) | OPEN — discovered 2026-07-02 on `3a06321e`; AR cannot write bitemporal collections; `NodeDB::Bitemporal` read helpers parked on `feat/bitemporal-read-helpers` (#72) |
@@ -44,7 +44,7 @@ earlier builds stop versioning (BUG-031).
 | 003 | `get_database_version` queries `current_setting('server_version_num')` (hardcoded `160000` fallback for older builds); `check_version` is a no-op |
 | 007 | `column_definitions` falls back to `DESCRIBE` and de-duplicates the result |
 | 008 | `NodedbAdapter#exec_delete` re-issues DELETE outside any AR-opened transaction (the autocommit path is clean on both scan and point-lookup reads) |
-| 014 | `NodedbAdapter#get_advisory_lock` / `#release_advisory_lock` no-op pair returning `true` |
+| 014 | `NodedbAdapter#get_advisory_lock` / `#release_advisory_lock` — collection-based mutex (`ar_advisory_locks`): atomic PK INSERT to acquire, owner-checked DELETE to release, stale rows stolen after `advisory_lock_ttl` (default 3600s) |
 | 019 | `load_additional_types` no-op on every transport; `tables`, `primary_keys`, `pk_and_sequence_for`, `indexes`, `foreign_keys`, `check_constraints` use NodeDB-native paths on every transport |
 | 025 | `NodedbAdapter#perform_query` strips the target-table qualifier from single-table SELECT/UPDATE/DELETE (JOIN/comma-FROM/aliased statements untouched); same rewrite on the BUG-008 `exec_delete` re-issue |
 | 030 | `NodedbAdapter#realias_group_by_columns` renames GROUP BY result columns back to the aliases the SELECT list requested (thin delegator over the raw result) |
