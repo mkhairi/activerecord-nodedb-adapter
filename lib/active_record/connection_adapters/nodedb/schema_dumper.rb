@@ -38,7 +38,14 @@ module ActiveRecord
         private
 
         def dump_collection(name, stream)
-          rows = @connection.execute("DESCRIBE #{name}").to_a
+          # SHOW COLLECTIONS lists tenant-homed collections daemon-wide,
+          # but only a session bound to that tenant can DESCRIBE them —
+          # and they don't belong in the default tenant's schema.rb.
+          rows = begin
+            @connection.execute("DESCRIBE #{name}").to_a
+          rescue ActiveRecord::StatementInvalid
+            return
+          end
           engine = detect_engine(rows)
           helper = ENGINE_HELPER[engine] || "create_collection"
           user_columns = extract_user_columns(rows)
