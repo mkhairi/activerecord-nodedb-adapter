@@ -127,43 +127,6 @@ module ActiveRecord
       # BUG-014 advisory locks (migrator contract + with_advisory_lock
       # block API) live in Nodedb::AdvisoryLocks.
 
-      # NodeDB BUG-008 (PARTIAL fix in v0.2.1): DELETE inside BEGIN;...COMMIT;
-      # is silently dropped on commit when the target collection's primary key
-      # column is declared with an explicit `NOT NULL PRIMARY KEY` clause --
-      # which is exactly what ActiveRecord emits for every PK. Plain
-      # `PRIMARY KEY` (implicit NOT NULL) works correctly on v0.2.1+.
-      # UPDATE/INSERT in the same transaction work fine.
-      #
-      # AR wraps `record.destroy` in an implicit transaction (and Rails 8 uses
-      # lazy transactions, so BEGIN is materialized as part of the DELETE
-      # call), meaning every destroy() silently no-ops without this override.
-      #
-      # Workaround: after the AR-issued DELETE runs, if a transaction is still
-      # open, commit it, re-issue the same DELETE outside any transaction
-      # (which actually persists), then begin a fresh transaction so AR's
-      # surrounding COMMIT closes cleanly. NodeDB tolerates the extra
-      # BEGIN/COMMIT pair, and a second DELETE matching no rows is a no-op.
-      #
-      # Trade-off: any INSERT/UPDATE done before the DELETE in the same AR
-      # transaction is committed early instead of atomically with the DELETE.
-      # Acceptable for record.destroy (the only mutation in a single record's
-      # destroy lifecycle is the DELETE itself).
-      #
-      # Remove this override once NodeDB persists DELETE inside transactions
-      # for collections with `NOT NULL PRIMARY KEY` columns.
-      def exec_delete(sql, name = nil, binds = [])
-        result = super
-        if transaction_open?
-          raw = @raw_connection
-          if raw
-            raw.send(:async_exec, "COMMIT")
-            raw.send(:async_exec, dequalify_single_table(sql))
-            raw.send(:async_exec, "BEGIN")
-          end
-        end
-        result
-      end
-
       # NodeDB BUG-025: a WHERE predicate referencing a column with table
       # qualification ("table"."column") silently matches ZERO rows unless
       # it is a TEXT primary-key equality. ActiveRecord qualifies every
