@@ -403,11 +403,11 @@ end
 - Ruby 3.2+
 - Rails 7.1+ (verified on 8.1.3)
 - NodeDB (pgwire on port 6432) — **latest upstream `main` recommended**
-  (verified against `3a06321e`, post-v0.3.0). Brings `SHOW GRAPH STATS`
-  scoping, bitemporal reads, spatial geometry constructors,
-  `version()` / `current_setting()` probes, graph MATCH, and
-  multi-database DDL. Adapter still bypasses AR's pg_catalog
-  introspection (see BUG-019 in `docs/bugs/`).
+  (verified against `f8a4df44`, post-v0.3.0). Brings native result-shape
+  parity, transactional bitemporal writes, `SHOW GRAPH STATS` scoping,
+  spatial geometry constructors, and `version()` / `current_setting()`
+  probes. Adapter still bypasses AR's pg_catalog introspection
+  (see the BUG-019 tracking issue).
   - On-disk format changed vs pre-June builds — old data dirs make
     the daemon panic at boot; start with a fresh data directory.
   - `fts` engine removed upstream (use `create_fts`).
@@ -472,8 +472,9 @@ end
 Moved to [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — NodeDB-side
 quirks grouped by user impact (resolved upstream, adapter-compensated,
 requires awareness, open). Per-bug reproductions and workaround history
-live in [`docs/bugs/`](docs/bugs/README.md). Last retested 2026-07-02
-against upstream `3a06321e`.
+live in the [issue tracker](https://github.com/mkhairi/activerecord-nodedb-adapter/issues?q=%22%5Bupstream%3ANodeDB%5D%22)
+(titles prefixed `[upstream:NodeDB] BUG-NNN`). Last retested 2026-07-04
+against upstream `f8a4df44`.
 
 ## License
 

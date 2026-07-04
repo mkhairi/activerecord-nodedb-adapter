@@ -43,32 +43,23 @@ AR relations, so history rows come back as hashes. `WHERE` composes;
 `ORDER BY` and computed columns don't (sort client-side on
 `_ts_system`).
 
-## Writes — the BUG-024 caveat
+## Writes
 
-INSERT and DELETE committed inside explicit transactions are silently
-lost on bitemporal collections, and AR wraps every `create!` /
-`destroy` in one (`update!` happens to work). Write with a validated
-raw autocommit INSERT:
+Plain ActiveRecord on current upstream: `create!` / `update!` /
+`destroy` persist and version normally (the old BUG-024 transactional
+write loss is fixed). Prefer the `NodeDB::Bitemporal` concern for
+time-travel reads:
 
 ```ruby
 class AuditLog < ApplicationRecord
+  include NodeDB::Bitemporal
   validates :actor, :action, :recorded_at, presence: true
-
-  def self.record!(attrs)
-    log = new(attrs)
-    log.id ||= SecureRandom.uuid
-    raise ActiveRecord::RecordInvalid, log unless log.valid?
-
-    cols   = %w[id actor action recorded_at]
-    values = cols.map { |c| connection.quote(log.public_send(c)) }.join(", ")
-    connection.execute("INSERT INTO #{table_name} (#{cols.join(', ')}) VALUES (#{values})")
-    log
-  end
 end
-```
 
-Collapse to plain `create!` when upstream fixes the transactional
-write path.
+AuditLog.versions        # full audit trail, oldest first
+AuditLog.history("l-42") # one record's trail
+AuditLog.as_of(1.hour.ago)
+```
 
 ## Sharp edges (current upstream)
 
@@ -76,12 +67,11 @@ write path.
   — the old version history resurrects into the new collection and the
   current-state read shows a corrupted merged row (BUG-028). Only a
   fresh data directory clears a poisoned name.
-- **Never name an ordinary column `bitemporal_id`** — on a *plain*
-  document_strict collection that name silently routes writes into
-  bitemporal machinery and transactional INSERTs vanish (BUG-026).
 - `count(*)` over `AS OF SYSTEM TIME NULL` counts current state, not
   versions — count history rows client-side.
 
-Full reproductions in [`docs/bugs/`](bugs/README.md); working demo in
-the [nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails)
+Full reproductions in the
+[issue tracker](https://github.com/mkhairi/activerecord-nodedb-adapter/issues?q=%22%5Bupstream%3ANodeDB%5D%22);
+working demo in the
+[nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails)
 sample app (audit-log page).

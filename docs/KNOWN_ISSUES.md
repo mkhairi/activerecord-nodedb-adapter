@@ -1,8 +1,11 @@
 # Known issues
 
 NodeDB-side quirks and limits, grouped by what they mean for adapter
-users. Per-bug reproductions and workaround details live in
-[`docs/bugs/`](bugs/README.md). This list tracks the **latest upstream
+users. Per-bug reproductions and workaround details live in the
+[issue tracker](https://github.com/mkhairi/activerecord-nodedb-adapter/issues?q=%22%5Bupstream%3ANodeDB%5D%22)
+(titles prefixed `[upstream:NodeDB] BUG-NNN` — each issue is the
+canonical record; retests and workaround changes land there as
+comments). This list tracks the **latest upstream
 only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
