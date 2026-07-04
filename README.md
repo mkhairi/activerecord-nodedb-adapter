@@ -191,9 +191,9 @@ Post.fts_search("nural networks", fuzzy: true)
 ### Bitemporal collections
 
 NodeDB retains every committed version of each row in a `BITEMPORAL`
-collection. Current-state reads are plain ActiveRecord; time-travel
-reads use the `AS OF SYSTEM TIME` scan suffix (raw SQL — it doesn't
-compose with AR relations):
+collection. Current-state reads and writes are plain ActiveRecord
+(`create!` / `update!` / `destroy` all persist and version); the
+`NodeDB::Bitemporal` concern exposes the system-time read surface:
 
 ```ruby
 # migration
@@ -202,39 +202,27 @@ create_collection :audit_logs, engine: :document_strict, bitemporal: true do |t|
   t.text :actor
   t.text :recorded_at
 end
-```
 
-```ruby
-AuditLog.where(actor: "alice")          # current state, plain AR
-
-conn = ActiveRecord::Base.connection
-conn.select_all("SELECT * FROM audit_logs AS OF SYSTEM TIME NULL").to_a
-# every committed version, each row carrying `_ts_system` (commit ms)
-conn.select_all("SELECT * FROM audit_logs AS OF SYSTEM TIME #{1.hour.ago.to_i * 1000}").to_a
-# rows current at that instant
-```
-
-**Write caveat (upstream BUG-024):** INSERT and DELETE committed inside
-explicit transactions are silently lost on bitemporal collections, and
-AR wraps every `create!`/`destroy` in one. Write with a validated raw
-autocommit INSERT instead:
-
-```ruby
-def self.record!(attrs)
-  log = new(attrs)
-  raise ActiveRecord::RecordInvalid, log unless log.valid?
-
-  cols   = %w[id actor recorded_at]
-  values = cols.map { |c| connection.quote(log.public_send(c)) }.join(", ")
-  connection.execute("INSERT INTO #{table_name} (#{cols.join(', ')}) VALUES (#{values})")
-  log
+class AuditLog < ApplicationRecord
+  include NodeDB::Bitemporal
 end
 ```
 
-Two more upstream sharp edges: don't DROP + CREATE a bitemporal
+```ruby
+AuditLog.where(actor: "alice")   # current state, plain AR
+AuditLog.versions                # every committed version, oldest first,
+                                 # each row carrying `_ts_system` (commit ms)
+AuditLog.history("log-42")       # one record's version trail
+AuditLog.as_of(1.hour.ago)       # rows current at that instant (Time or ms)
+```
+
+Time-travel rows come back as `Array<Hash>` — the `AS OF SYSTEM TIME`
+scan suffix doesn't compose with AR relations, and history rows carry
+the extra `_ts_system` column.
+
+One upstream sharp edge remains: don't DROP + CREATE a bitemporal
 collection under the same name (the old version history resurrects,
-BUG-028), and never name an ordinary column `bitemporal_id`
-(BUG-026). Details in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md).
+BUG-028). Details in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md).
 
 ## Idiomatic querying
 
