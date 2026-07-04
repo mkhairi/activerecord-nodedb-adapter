@@ -53,10 +53,14 @@ You write idiomatic AR; the adapter swallows the workaround:
   migration mutex application-level: an `ar_advisory_locks`
   `document_strict` collection whose TEXT PRIMARY KEY makes
   acquisition an atomic INSERT. Cross-process `db:migrate` safety is
-  restored (concurrent runs raise `ConcurrentMigrationError`).
-  Caveats: try-lock only, not session-scoped — a crashed holder's
-  lock is stolen after `advisory_lock_ttl` seconds (config, default
-  3600).
+  restored (concurrent runs raise `ConcurrentMigrationError`), and a
+  `with_advisory_lock(name, timeout_seconds:)` /
+  `with_advisory_lock!` block API (modeled on the with_advisory_lock
+  gem) is available for app-level coordination: guaranteed release
+  via ensure, bounded waiting, thread-local reentrancy,
+  `advisory_lock_exists?`, and `NODEDB_ADVISORY_LOCK_PREFIX`
+  namespacing. Caveat: not session-scoped — a crashed holder's lock
+  is stolen after `advisory_lock_ttl` seconds (config, default 3600).
 - **Edge-store keys track the IN-clause spelling verbatim** — a
   double-quoted identifier in `GRAPH INSERT EDGE IN "name"` stores a
   literal-quoted key that scoped `SHOW GRAPH STATS` lookups miss. The
@@ -123,6 +127,15 @@ You write idiomatic AR; the adapter swallows the workaround:
   SHOW COLLECTIONS resolve against the default database only, so
   every collection created there is unreachable. Stick to the default
   database (the spec suite now does).
+- **BUG-033 — a PK point-lookup miss poisons that key for the rest of
+  the session** (`f8a4df44`): after `WHERE id = 'k'` returns nothing,
+  a subsequent INSERT of `'k'` succeeds but the same bare PK-equality
+  read keeps returning 0 rows (scans and compound predicates see the
+  row; INSERT/UPDATE don't invalidate the cached miss). Breaks
+  same-connection check-then-insert-then-read patterns like
+  `find_or_create_by` + reload. No general adapter workaround — avoid
+  re-reading a just-created key by bare PK equality on the same
+  connection, or add any second predicate.
 - **BUG-028 — DROP + CREATE of a bitemporal collection resurrects the
   old versioned-store history** (and a stale plain row) under the same
   name. Retested 2026-07-04, still present.

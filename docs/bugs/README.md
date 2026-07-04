@@ -35,7 +35,8 @@ earlier builds stop versioning (BUG-031).
 | 029 | `count(*)` materializes a row counter that DELETE never decrements — counts drift upward permanently on previously-counted collections | OPEN — isolated 2026-07-03 on `3a06321e`; assert cardinality via scans around deletes (#90) |
 | 030 | GROUP BY output drops group-key column aliases, reorders columns group-keys-first; unaliased aggregates return empty cells | OPEN — regression discovered 2026-07-04 on `67c4572d`; adapter re-aliases GROUP BY result columns in `perform_query` |
 | 031 | Bitemporal versioned store stops recording after a daemon upgrade (pre-upgrade collections accept writes but append no history) | OPEN — discovered 2026-07-04 on `67c4572d`; no client-side workaround; recreate the collection (BUG-028 ghosts apply) or wipe the data dir |
-| 032 | Databases created by `CREATE DATABASE` are unusable — DDL writes home to the new database but catalog reads (DESCRIBE / SELECT / SHOW COLLECTIONS) resolve against the default database only | OPEN — regression discovered 2026-07-04 on `67c4572d`; spec suite targets the default database until multi-database works again |
+| 032 | Databases created by `CREATE DATABASE` are unusable — DDL writes home to the new database but catalog reads (DESCRIBE / SELECT / SHOW COLLECTIONS) resolve against the default database only | OPEN — regression discovered 2026-07-04 on `67c4572d`; retested still open on `f8a4df44`; spec suite targets the default database until multi-database works again |
+| 033 | A PK point-lookup miss poisons that key's bare `WHERE id =` reads for the rest of the session — INSERT/UPDATE don't invalidate the cached miss (scans and compound predicates see the row) | OPEN — regression discovered 2026-07-04 on `f8a4df44`; advisory-lock machinery reads via scan; no general workaround for model reads |
 
 ## Adapter workarounds currently shipped
 
@@ -44,7 +45,8 @@ earlier builds stop versioning (BUG-031).
 | 003 | `get_database_version` queries `current_setting('server_version_num')` (hardcoded `160000` fallback for older builds); `check_version` is a no-op |
 | 007 | `column_definitions` falls back to `DESCRIBE` and de-duplicates the result |
 | 008 | `NodedbAdapter#exec_delete` re-issues DELETE outside any AR-opened transaction (the autocommit path is clean on both scan and point-lookup reads) |
-| 014 | `NodedbAdapter#get_advisory_lock` / `#release_advisory_lock` — collection-based mutex (`ar_advisory_locks`): atomic PK INSERT to acquire, owner-checked DELETE to release, stale rows stolen after `advisory_lock_ttl` (default 3600s) |
+| 014 | `Nodedb::AdvisoryLocks` — collection-based mutex (`ar_advisory_locks`): atomic PK INSERT to acquire, owner-checked DELETE to release, stale rows stolen after `advisory_lock_ttl` (default 3600s). Migrator contract plus `with_advisory_lock`/`with_advisory_lock!` block API (ensure-release, `timeout_seconds` polling, thread-local reentrancy, `advisory_lock_exists?`, `NODEDB_ADVISORY_LOCK_PREFIX` namespacing) |
+| 033 | `AdvisoryLocks#advisory_lock_row` scans the lock collection and filters client-side instead of `WHERE id =` (the lock flow reads a key right before inserting it — exactly the poisoned shape) |
 | 019 | `load_additional_types` no-op on every transport; `tables`, `primary_keys`, `pk_and_sequence_for`, `indexes`, `foreign_keys`, `check_constraints` use NodeDB-native paths on every transport |
 | 025 | `NodedbAdapter#perform_query` strips the target-table qualifier from single-table SELECT/UPDATE/DELETE (JOIN/comma-FROM/aliased statements untouched); same rewrite on the BUG-008 `exec_delete` re-issue |
 | 030 | `NodedbAdapter#realias_group_by_columns` renames GROUP BY result columns back to the aliases the SELECT list requested (thin delegator over the raw result) |

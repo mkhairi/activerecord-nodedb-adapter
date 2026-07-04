@@ -24,10 +24,30 @@ The adapter therefore implements the migration mutex itself
   (connection config, default 3600) are stolen on acquire, since a
   crashed holder can't auto-release.
 
+On top of the migrator contract, a block API modeled on the
+`with_advisory_lock` gem ships for app-level coordination:
+
+- `with_advisory_lock(name, timeout_seconds: nil) { ... }` — yields
+  under the lock and releases in an `ensure` (crash-in-process safe);
+  returns the block value, or `false` when not acquired.
+  `timeout_seconds: 0` = try once, a positive value polls with
+  randomized backoff until the deadline, `nil` = wait forever.
+- `with_advisory_lock!` — same, raises
+  `Nodedb::FailedToAcquireLock` instead of returning `false`.
+- Reentrant per thread: re-requesting a held lock just yields; only
+  the outermost exit releases.
+- `advisory_lock_exists?(name)` introspection; lock keys can be
+  namespaced with the `NODEDB_ADVISORY_LOCK_PREFIX` env var.
+
 Semantic differences vs PostgreSQL advisory locks (accepted):
-try-lock only, and not session-scoped — a crash leaves the row until
-the TTL steal. Cross-process migration safety is restored; the old
-no-op stubs provided none.
+not session-scoped — a crash leaves the row until the TTL steal
+(the block API's ensure-release narrows this to hard crashes).
+Cross-process migration safety is restored; the old no-op stubs
+provided none.
+
+Note: lock-row reads scan the collection instead of `WHERE id =`
+point-lookups — BUG-033 poisons a key's PK-equality reads after a
+miss, and the lock flow reads a key right before inserting it.
 
 ### Earlier retest (PARTIAL — NodeDB v0.2.1, 2026-05-15)
 
