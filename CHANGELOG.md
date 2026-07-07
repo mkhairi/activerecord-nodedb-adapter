@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.11] — 2026-07-08
+
+Tracks NodeDB upstream `main` at `8e84501a` (unchanged since alpha.10).
+
+### Added
+
+- Migration column methods: `t.vector :embedding, dim: 384` and
+  `t.geometry :geom` in `create_collection` / `create_table` blocks
+  via `Nodedb::TableDefinition` (raw-SQL string types; the
+  `t.column :emb, "VECTOR(384)"` form keeps working). (#124)
+- Generators: `rails g nodedb:collection NAME field:type
+  field:vector{dim} --engine= --bitemporal` emits a
+  `create_collection` migration; `rails g nodedb:vector_index
+  COLLECTION COLUMN --dim= --metric=` emits a reversible
+  vector-index migration. (#125)
+- Adapter answers `valid_type?` true for `:vector` / `:geometry`
+  (class + instance), unblocking Rails generator attribute
+  validation. (#125)
+
+### Documentation
+
+- Batch inserts pinned by spec: `insert_all` / `insert_all!` /
+  `upsert_all` work through the inherited PostgreSQL single-statement
+  VALUES paths on current upstream (conflict skip + upsert update
+  honoured); `returning:` data is always empty — NodeDB sends no
+  RETURNING payload. (#126)
+
 ## [0.1.0.alpha.10] — 2026-07-07
 
 Tracks NodeDB upstream `main` at `8e84501a` (post-v0.3.0). A large
