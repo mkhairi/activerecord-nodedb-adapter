@@ -4,6 +4,7 @@ require_relative "nodedb/column"
 require_relative "nodedb/database_statements"
 require_relative "nodedb/schema_statements"
 require_relative "nodedb/schema_creation"
+require_relative "nodedb/table_definition"
 require_relative "nodedb/schema_dumper"
 require_relative "nodedb/schema_migration"
 require_relative "nodedb/internal_metadata"
@@ -73,6 +74,11 @@ module ActiveRecord
         else
           super
         end
+      end
+
+      # Migration blocks get NodeDB column methods (t.vector, t.geometry).
+      def create_table_definition(name, **options)
+        Nodedb::TableDefinition.new(self, name, **options)
       end
 
       # NodeDB server version extracted from SELECT version().
