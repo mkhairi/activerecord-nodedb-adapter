@@ -127,7 +127,10 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
     end
   end
 
-  describe "BUG-025 qualified-WHERE dequalification", :integration do
+  # BUG-025 regression guard: table-qualified WHERE refs silently matched
+  # zero rows; fixed upstream, so AR's qualified SQL must work with no
+  # adapter rewrite.
+  describe "qualified WHERE evaluation (BUG-025 regression guard)", :integration do
     let(:name) { "dequal_#{SecureRandom.hex(4)}" }
 
     before do
@@ -170,16 +173,6 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
 
     it "grouped counts keep their group keys (BUG-030 alias re-mapping)" do
       expect(DequalModel.group(:label).count).to eq("alpha" => 1, "beta" => 1)
-    end
-
-    it "leaves JOIN statements untouched" do
-      sql = %(SELECT "a"."x" FROM "a" JOIN "b" ON "a"."id" = "b"."a_id")
-      expect(conn.send(:dequalify_single_table, sql)).to eq(sql)
-    end
-
-    it "leaves aliased FROM untouched" do
-      sql = %(SELECT "t"."x" FROM "orders" AS "t" WHERE "t"."x" = 1)
-      expect(conn.send(:dequalify_single_table, sql)).to eq(sql)
     end
   end
 
