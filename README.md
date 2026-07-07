@@ -316,6 +316,23 @@ create_collection :products, engine: :document_strict, id: false do |t|
 end
 ```
 
+### NodeDB column types
+
+Migration blocks accept NodeDB-typed column methods alongside the
+standard AR ones:
+
+```ruby
+create_document_strict :articles do |t|
+  t.text     :id, primary_key: true
+  t.text     :title
+  t.vector   :embedding, dim: 384   # VECTOR(384)
+  t.geometry :geom                  # GEOMETRY
+end
+```
+
+`t.vector` requires `dim:`. Both are shorthand for the raw-SQL column
+form (`t.column :embedding, "VECTOR(384)"`), which keeps working.
+
 Notes: AR's `t.datetime` emits `TIMESTAMP(6)`, which NodeDB rejects —
 use `t.column :at, "TIMESTAMP"` for timestamp columns. Integer
 `SERIAL` primary keys don't exist (no sequences); use text/UUID keys
@@ -457,6 +474,9 @@ end
 - [x] `Graph#graph_algo(:pagerank, personalization: {...})` — NodeDB v0.3.0 personalized PageRank with Hash → JSON encoding (via nodedb-ruby `SQL::Graph.algo`)
 - [x] `connection.show_stats / show_metrics / show_memory / show_roles / show_tenant / show_tenants / set_tenant` — operational SHOW surface; tenant identifier args validated through a strict allowlist to avoid SQL-injection through the bare-identifier interpolation
 - [x] Sample Rails 8 app with full CRUD walkthrough: [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails)
+- [x] Migration column methods: `t.vector :embedding, dim: 384` and
+      `t.geometry :geom` work inside `create_collection` / `create_table`
+      blocks (previously required `t.column :embedding, "VECTOR(384)"`)
 
 ### Pending
 - [ ] Auto-unwrap of schemaless `SELECT *` rows (currently returns
