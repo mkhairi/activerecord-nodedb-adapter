@@ -316,6 +316,19 @@ create_collection :products, engine: :document_strict, id: false do |t|
 end
 ```
 
+### Generators
+
+```bash
+rails g nodedb:collection articles title:text score:float embedding:vector{384} geom:geometry
+rails g nodedb:collection audit_logs actor:text --engine=document_strict --bitemporal
+rails g nodedb:vector_index articles embedding --dim=384 --metric=cosine
+```
+
+`nodedb:collection` emits a `create_collection` migration (vector
+columns take the dim from the `field:vector{dim}` limit syntax);
+`nodedb:vector_index` emits a reversible `create_vector_index` /
+`drop_vector_index` migration named `idx_<collection>_<column>`.
+
 ### NodeDB column types
 
 Migration blocks accept NodeDB-typed column methods alongside the
@@ -482,7 +495,7 @@ end
 - [ ] Auto-unwrap of schemaless `SELECT *` rows (currently returns
       `{ "result" => "<json>" }`)
 - [ ] Silence harmless `INSERT EDGE` `pg`-gem stderr warnings
-- [ ] Generators (`rails g nodedb:collection`, `nodedb:vector_index`)
+- [x] Generators (`rails g nodedb:collection`, `nodedb:vector_index`)
 - [ ] Connection pool aware fixtures helper for RSpec
 - [x] CHANGELOG.md
 - [ ] gemspec push to RubyGems (currently consumed via `path:`)

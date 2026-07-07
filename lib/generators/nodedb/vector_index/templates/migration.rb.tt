@@ -1,0 +1,10 @@
+class CreateVectorIndex<%= collection_name.camelize %><%= column_name.camelize %> < ActiveRecord::Migration<%= migration_version %>
+  def up
+    create_vector_index :<%= index_name %>,
+      on: :<%= collection_name %>, column: :<%= column_name %>, metric: :<%= options[:metric] %>, dim: <%= options[:dim].to_i %>
+  end
+
+  def down
+    drop_vector_index :<%= index_name %>
+  end
+end
