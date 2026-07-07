@@ -490,6 +490,10 @@ end
 - [x] Migration column methods: `t.vector :embedding, dim: 384` and
       `t.geometry :geom` work inside `create_collection` / `create_table`
       blocks (previously required `t.column :embedding, "VECTOR(384)"`)
+- [x] `insert_all` / `insert_all!` / `upsert_all` — inherited PG batch
+      paths verified on live NodeDB (single multi-row VALUES statement;
+      conflict skip + upsert update honoured). Caveat: `returning:` data
+      is always empty (NodeDB sends no RETURNING payload)
 
 ### Pending
 - [ ] Auto-unwrap of schemaless `SELECT *` rows (currently returns
