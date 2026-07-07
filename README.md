@@ -403,11 +403,14 @@ end
 - Ruby 3.2+
 - Rails 7.1+ (verified on 8.1.3)
 - NodeDB (pgwire on port 6432) — **latest upstream `main` recommended**
-  (verified against `f8a4df44`, post-v0.3.0). Brings native result-shape
-  parity, transactional bitemporal writes, `SHOW GRAPH STATS` scoping,
-  spatial geometry constructors, and `version()` / `current_setting()`
-  probes. Adapter still bypasses AR's pg_catalog introspection
-  (see the BUG-019 tracking issue).
+  (verified against `8e84501a`, post-v0.3.0). Brings document restart
+  durability, qualified-WHERE and GROUP-BY-alias evaluation (both
+  adapter rewrites retired), graph collection scoping, multi-database
+  catalog reads, native KV/vector parity, and unified engine-clause
+  spellings. Adapter still bypasses AR's pg_catalog introspection
+  (see the BUG-019 tracking issue), and this head carries fresh
+  regressions around scalar aggregates and filtered history reads —
+  see `docs/KNOWN_ISSUES.md`.
   - On-disk format changed vs pre-June builds — old data dirs make
     the daemon panic at boot; start with a fresh data directory.
   - `fts` engine removed upstream (use `create_fts`).
@@ -443,13 +446,13 @@ end
 - [x] `connection.with_settings { … }` block for scoped session vars
 - [x] Model concerns: `NodeDB::Vector`, `Graph`, `Timeseries`, `Spatial`, `KV`,
       `FullTextSearch`
-- [x] `record.destroy` workaround for NodeDB BUG-008 (transactional DELETE
-      leaves a stale PK point-lookup phantom; adapter re-issues on the clean
-      autocommit path)
+- [x] `record.destroy` persists transactionally with no adapter override
+      (the BUG-008 re-issue workaround was retired after the upstream
+      transactional DELETE/PUT rework)
 - [x] `Graph.silence_libpq_noise` filter for harmless libpq stderr warnings
 - [x] `create_fts(name, fulltext: [...])` — document_strict collection + `CREATE FULLTEXT INDEX` (NodeDB removed the `fts` engine)
 - [x] `drop_collection` rescues missing-collection errors when `if_exists: true`
-- [x] `create_collection ..., bitemporal: true` — NodeDB `BITEMPORAL` collection modifier (reads work on current upstream; transactional writes blocked by upstream BUG-024, so AR models can't populate bitemporal collections yet)
+- [x] `create_collection ..., bitemporal: true` — NodeDB `BITEMPORAL` collection modifier; AR models read and write bitemporal collections (upstream BUG-024 fixed). Caveat on current upstream: filtered history reads (`AS OF ... WHERE`) return empty — BUG-038
 - [x] `Model.graph_stats(verbose:, as_of:)` + `connection.graph_stats(collection:, verbose:, as_of:)` — `SHOW GRAPH STATS`, scoped form (upstream scoping fixed; Ruby fallback retired)
 - [x] `Graph#graph_algo(:pagerank, personalization: {...})` — NodeDB v0.3.0 personalized PageRank with Hash → JSON encoding (via nodedb-ruby `SQL::Graph.algo`)
 - [x] `connection.show_stats / show_metrics / show_memory / show_roles / show_tenant / show_tenants / set_tenant` — operational SHOW surface; tenant identifier args validated through a strict allowlist to avoid SQL-injection through the bare-identifier interpolation
@@ -458,9 +461,6 @@ end
 ### Pending
 - [ ] Auto-unwrap of schemaless `SELECT *` rows (currently returns
       `{ "result" => "<json>" }`)
-- [x] SQL rewriter to strip the `"table".col` qualifier on single-table
-      statements (BUG-025 workaround; also fixes `SELECT "articles".*`
-      projections)
 - [ ] Silence harmless `INSERT EDGE` `pg`-gem stderr warnings
 - [ ] Generators (`rails g nodedb:collection`, `nodedb:vector_index`)
 - [ ] Connection pool aware fixtures helper for RSpec
@@ -473,8 +473,8 @@ Moved to [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — NodeDB-side
 quirks grouped by user impact (resolved upstream, adapter-compensated,
 requires awareness, open). Per-bug reproductions and workaround history
 live in the [issue tracker](https://github.com/mkhairi/activerecord-nodedb-adapter/issues?q=%22%5Bupstream%3ANodeDB%5D%22)
-(titles prefixed `[upstream:NodeDB] BUG-NNN`). Last retested 2026-07-04
-against upstream `f8a4df44`.
+(titles prefixed `[upstream:NodeDB] BUG-NNN`). Last retested 2026-07-07
+against upstream `8e84501a`.
 
 ## License
 
