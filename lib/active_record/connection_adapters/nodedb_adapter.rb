@@ -81,6 +81,16 @@ module ActiveRecord
         Nodedb::TableDefinition.new(self, name, **options)
       end
 
+      # Let Rails generators accept NodeDB column types
+      # (GeneratedAttribute.valid_type? consults the adapter class).
+      def self.valid_type?(type)
+        type == :vector || type == :geometry || super
+      end
+
+      def valid_type?(type)
+        type == :vector || type == :geometry || super
+      end
+
       # NodeDB server version extracted from SELECT version().
       def nodedb_version
         @nodedb_version ||= begin

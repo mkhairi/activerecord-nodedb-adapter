@@ -1,0 +1,9 @@
+class Create<%= collection_name.camelize %> < ActiveRecord::Migration<%= migration_version %>
+  def change
+    create_collection :<%= collection_name %><%= collection_options %> do |t|
+<% attributes.each do |attribute| -%>
+      <%= column_line(attribute) %>
+<% end -%>
+    end
+  end
+end
