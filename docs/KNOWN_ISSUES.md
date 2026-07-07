@@ -9,34 +9,23 @@ comments). This list tracks the **latest upstream
 only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
-Last retested: **2026-07-04** against upstream `main` at `f8a4df44`
-(post-v0.3.0). That head's transactional DELETE/PUT rework resolved
-BUG-008 (txn DELETE phantom), BUG-024 (bitemporal txn write loss —
-ActiveRecord can write bitemporal collections now), and BUG-026
-(`bitemporal_id` column name), but introduced BUG-033 (negative
-point-lookup cache poisoning). The same day's `67c4572d`
-response-shaping rework brought the native transport to result-shape
-parity with pgwire (BUG-018 resolved) while regressing GROUP BY output
-(BUG-030) and multi-database catalog reads (BUG-032).
+Last retested: **2026-07-07** against upstream `main` at `8e84501a`
+(post-v0.3.0). A large fix wave resolved eight tracked bugs — graph
+collection scoping (BUG-023), engine-spelling divergence (BUG-027),
+bitemporal history resurrection (BUG-028), count-after-DELETE drift
+(BUG-029), the bitemporal versioned-store freeze (BUG-031),
+multi-database catalog reads (BUG-032), auth-churn flaps (BUG-034), and
+the critical document restart-durability loss (BUG-036) — and the
+qualified-WHERE (BUG-025) and GROUP-BY-alias (BUG-030) evaluator
+defects, whose adapter workarounds are now removed. The same head
+regressed scalar aggregates, filtered history reads, TIMESTAMP
+upper-bound compares, timeseries restart replay, and DESCRIBE output
+(BUG-037…041 below).
 
 ## Adapter compensates transparently
 
 You write idiomatic AR; the adapter swallows the workaround:
 
-- **BUG-025 — qualified WHERE refs silently match zero rows.** NodeDB
-  matches nothing for `"table"."column"` predicates except TEXT-PK
-  equality — which would break every AR hash-condition
-  (`where(name: ...)`, conditional `count`, uniqueness validations).
-  The adapter strips the target-table qualifier from single-table
-  SELECT/UPDATE/DELETE before dispatch (JOINs and aliased FROMs are
-  left untouched). This also fixes qualified projections
-  (`SELECT "articles".*`).
-- **BUG-030 — GROUP BY output drops group-key column aliases** (and
-  reorders columns group-keys-first), which collapses every AR grouped
-  calculation (`group(...).sum/count`) onto a `nil` key. The adapter
-  renames the returned base column names back to the aliases the
-  SELECT list requested. Unaliased aggregates in hand-written GROUP BY
-  SQL still return empty cells — alias them.
 - **BUG-003 — `PQserverVersion()` raises.** libpq can't parse the
   `server_version` ParameterStatus (`NodeDB 0.3.0`). The adapter asks
   the server via `current_setting('server_version_num')` (fallback
@@ -45,7 +34,8 @@ You write idiomatic AR; the adapter swallows the workaround:
   `current_schemas()` returns an empty cell and the `pg_range` /
   `pg_attrdef` vtables are missing, so AR's `tables`,
   `column_definitions`, and `load_additional_types` queries can't run
-  as written. The adapter routes schema reflection through
+  as written (regclass casts, cross-vtable joins, and `typelem` DO
+  evaluate now). The adapter routes schema reflection through
   NodeDB-native paths (SHOW COLLECTIONS / DESCRIBE) and no-ops
   `load_additional_types`.
 - **BUG-014 — advisory locks missing** (upstream closed won't-fix on
@@ -82,12 +72,15 @@ You write idiomatic AR; the adapter swallows the workaround:
   id + surrogate + distance; note the `id` column is only the document
   id on vector-engine collections (a result ordinal elsewhere), so do
   a follow-up `find` where you need the record.
-- **`count(*)` on an empty document collection returns zero rows**
-  instead of a single `0` row.
-- **`count(*)` never decrements after DELETE** (BUG-029): the first
-  count materializes a row counter that INSERTs maintain but DELETEs
-  don't, so counts drift upward permanently on previously-counted
-  collections. Assert cardinality via scans around delete operations.
+- **BUG-041 — DESCRIBE lists the PK column twice** (`id TEXT` +
+  `id TEXT PRIMARY KEY`, contradictory nullability) plus a `__storage`
+  metadata row. Mostly masked because ActiveRecord keys columns by
+  name and the schema dumper emits one entry, but code that iterates
+  `connection.columns` sees the duplicate.
+- **Unaliased aggregates in hand-written GROUP BY SQL return empty
+  cells** (BUG-030's remaining case) — alias them
+  (`SUM(x) AS sum_x`). AR's own grouped calculations always alias and
+  work unmodified now.
 - **`transport: native` is at result-shape parity with pgwire** since
   BUG-018 was fixed upstream, but pgwire remains the primary,
   default transport — the hand-rolled native client will be replaced
@@ -95,48 +88,49 @@ You write idiomatic AR; the adapter swallows the workaround:
 
 ## Open, no workaround
 
-- **BUG-023 — `MATCH ... IN <collection>` ignores collection scope**;
-  plain DROP leaves edge-store entries visible to MATCH and
-  `SHOW GRAPH STATS`. MATCH exposure in the `Graph` concern is on
-  hold until scoping works.
+- **BUG-037 — scalar aggregates return per-shard partial rows**
+  (CRITICAL, `8e84501a`): `count(*)` / `SUM(...)` without GROUP BY
+  return 11 rows (ten identity rows + the real value at a
+  shard-dependent position), and an aliased scalar aggregate returns
+  all-empty rows. `Model.count` / `.sum` therefore read `0`/`nil` most
+  of the time, silently — pagination totals, `exists?`-style guards,
+  and count assertions are all unreliable. Assert cardinality via
+  scans (`Model.pluck(:id).size`) until fixed. Grouped calculations
+  are unaffected.
+- **BUG-038 — `AS OF SYSTEM TIME NULL` + `WHERE` returns zero rows**
+  (`8e84501a`): the bare history scan works, so
+  `Bitemporal.versions` is fine, but the per-record surface —
+  `Bitemporal.history(pk)` and `.as_of(time)` with conditions —
+  returns empty.
+- **BUG-039 — TIMESTAMP upper-bound compares match zero rows**
+  (`8e84501a`): `t <= ?`, `t < ?`, and `BETWEEN` on TIMESTAMP columns
+  silently match nothing (`>=` / `>` work; INTEGER compares fine).
+  Every date-window / expiry query shape is affected.
+- **BUG-040 — timeseries collections lose AND duplicate points across
+  daemon restarts** (`8e84501a`): the first restart after writes drops
+  the newest point(s) and/or double-applies surviving ones on replay.
+  Document/KV/graph/bitemporal data survive restarts intact (BUG-036
+  is fixed); treat timeseries data as restart-volatile — reseed after
+  daemon restarts.
+- **BUG-033 — a PK point-lookup miss poisons that key for the rest of
+  the session** (`f8a4df44`, still present on `8e84501a`): after
+  `WHERE id = 'k'` returns nothing, a subsequent INSERT of `'k'`
+  succeeds but the same bare PK-equality read keeps returning 0 rows
+  (scans and compound predicates see the row; INSERT/UPDATE don't
+  invalidate the cached miss). Breaks same-connection
+  check-then-insert-then-read patterns like `find_or_create_by` +
+  reload. Avoid re-reading a just-created key by bare PK equality on
+  the same connection, or add any second predicate.
+- **BUG-035 — DROP USER leaves dangling catalog owner references that
+  brick the next boot**: even with every owned collection dropped
+  first, dropping a tenant user (and then its tenant) leaves an owner
+  reference the boot integrity check refuses to repair — the data
+  directory is unbootable without a wipe. Treat tenant users as
+  provision-only.
 - **Spatial read-side accessors** — `ST_AsText` / `ST_X` / `ST_Y`
   return empty and `ST_DWithin` rejects constructor arguments, so
   spatial predicates remain unusable (write path works; raw GeoJSON
   column reads work).
-- **BUG-036 — document_strict rows lose ALL column data across a
-  daemon restart** (CRITICAL, `f8a4df44`): rows written by one daemon
-  process read back as empty cells in every column (including the PK)
-  after a graceful same-binary restart. `count(*)` and the PK
-  uniqueness index survive; KV data survives; only the document
-  projections are lost. Cascades into `rails db:migrate` crashing with
-  a duplicate-`environment` `PG::UniqueViolation` (empty
-  `schema_migrations` reads make AR re-run everything). No workaround:
-  treat every daemon restart as data loss for document collections —
-  wipe + `bin/setup` + reseed. Subsumes BUG-031 (the "upgrade decode
-  break" needed no upgrade, and its bitemporal history freeze is one
-  face of this).
-- **BUG-032 — databases created by `CREATE DATABASE` are unusable**:
-  DDL writes home to the new database, but DESCRIBE / SELECT /
-  SHOW COLLECTIONS resolve against the default database only, so
-  every collection created there is unreachable. Stick to the default
-  database (the spec suite now does).
-- **BUG-033 — a PK point-lookup miss poisons that key for the rest of
-  the session** (`f8a4df44`): after `WHERE id = 'k'` returns nothing,
-  a subsequent INSERT of `'k'` succeeds but the same bare PK-equality
-  read keeps returning 0 rows (scans and compound predicates see the
-  row; INSERT/UPDATE don't invalidate the cached miss). Breaks
-  same-connection check-then-insert-then-read patterns like
-  `find_or_create_by` + reload. No general adapter workaround — avoid
-  re-reading a just-created key by bare PK equality on the same
-  connection, or add any second predicate.
-- **BUG-034 — transient auth failures under connection churn**: bursts
-  of rapid fresh connections get `FATAL: Password authentication
-  failed` with correct credentials; self-recovers in ~1s, nothing
-  logged. Pooled long-lived connections (normal Rails operation) are
-  unaffected; scripted one-psql-per-statement workloads should retry.
-- **BUG-028 — DROP + CREATE of a bitemporal collection resurrects the
-  old versioned-store history** (and a stale plain row) under the same
-  name. Retested 2026-07-04, still present.
 - **`ROLLBACK AND CHAIN` unsupported** — surfaces when AR retries a
   failed nested transaction. A translation shim (`ROLLBACK; BEGIN`) is
   a possible future adapter addition.

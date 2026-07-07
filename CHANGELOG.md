@@ -8,6 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.10] — 2026-07-07
+
+Tracks NodeDB upstream `main` at `8e84501a` (post-v0.3.0). A large
+upstream fix wave resolved eight tracked bugs (BUG-023/027/028/029/
+031/032/034/036 — including the critical document restart-durability
+loss) plus the qualified-WHERE and GROUP-BY-alias evaluator defects,
+letting this release delete both remaining query-rewrite workarounds.
+The adapter no longer intercepts query results at all.
+
+### Removed
+
+- BUG-025 single-table WHERE dequalification rewrite — upstream
+  evaluates table-qualified refs correctly; AR's qualified SQL runs
+  unmodified (#119).
+- BUG-030 GROUP BY realias delegator and the `perform_query` override
+  that carried both rewrites — upstream honours group-key aliases and
+  SELECT-list column order; AR grouped calculations work unmodified
+  (#121). Unaliased aggregates in hand-written GROUP BY SQL still
+  return empty cells — alias them.
+
+### Known upstream regressions (no adapter workaround)
+
+- BUG-037: scalar aggregates without GROUP BY return per-shard partial
+  rows — `Model.count` / `.sum` unreliable; assert via scans (#114).
+- BUG-038: `AS OF SYSTEM TIME NULL` + `WHERE` returns zero rows —
+  `Bitemporal.history` / `.as_of` with conditions come back empty
+  (#115).
+- BUG-039: TIMESTAMP `<` / `<=` / `BETWEEN` predicates match zero rows
+  (#116).
+- BUG-040: timeseries collections lose and duplicate points across
+  daemon restarts (#117).
+- BUG-041: DESCRIBE lists the PK column twice; mostly masked, visible
+  when iterating `connection.columns` (#118).
+
+See `docs/KNOWN_ISSUES.md` (refreshed for `8e84501a`) for the full
+rollup.
+
 ## [0.1.0.alpha.9] — 2026-07-04
 
 Tracks NodeDB upstream `main` at `f8a4df44` (post-v0.3.0). Two upstream
