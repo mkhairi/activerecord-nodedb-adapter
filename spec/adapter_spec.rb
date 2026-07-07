@@ -171,7 +171,7 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
       expect(sums).to eq("alpha" => 7.0, "beta" => 3.0)
     end
 
-    it "grouped counts keep their group keys (BUG-030 alias re-mapping)" do
+    it "grouped counts keep their group keys (BUG-030 regression guard)" do
       expect(DequalModel.group(:label).count).to eq("alpha" => 1, "beta" => 1)
     end
   end
