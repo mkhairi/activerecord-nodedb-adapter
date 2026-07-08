@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.12] — 2026-07-08
+
+Tracks NodeDB upstream `main` at `8e84501a`. Requires
+`nodedb-ruby >= 0.1.0.alpha.9`.
+
+### Fixed
+
+- `graph_delete_edge` passes the `IN <collection>` clause current
+  upstream requires (was failing with a parse error; previously
+  untested). (#128)
+- `#columns` no longer returns the primary-key column twice —
+  DESCRIBE row normalization now goes through
+  `NodeDB::Schema.normalize`. (#129)
+
+### Tooling
+
+- Daemon-less GitHub Actions CI (Ruby 3.2 + 3.4; :integration
+  skips). (#130)
+- standardrb baseline, all offenses fixed, CI-gated. (#131)
+
 ## [0.1.0.alpha.11] — 2026-07-08
 
 Tracks NodeDB upstream `main` at `8e84501a` (unchanged since alpha.10).
