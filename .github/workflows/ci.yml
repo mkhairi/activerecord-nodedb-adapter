@@ -1,0 +1,28 @@
+name: CI
+
+# Daemon-less CI: no NodeDB in Actions (no public daemon image), so
+# :integration examples skip and the suite exercises loading, DDL
+# serialization, generators, and unit surfaces. Live-daemon runs stay
+# a local pre-merge requirement.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  spec:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.2", "3.4"]
+    steps:
+      - uses: actions/checkout@v4
+      # Gemfile points nodedb-ruby at the sibling path checkout.
+      - name: Check out nodedb-ruby alongside
+        run: git clone --depth 1 https://github.com/mkhairi/nodedb-ruby ../nodedb-ruby
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - run: bundle exec rspec
