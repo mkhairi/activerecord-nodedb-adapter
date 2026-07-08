@@ -12,6 +12,10 @@ RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
   let(:conn) { ActiveRecord::Base.connection }
 
   before(:all) do
+    # :integration skip fires per-example, after this context hook —
+    # bail out ourselves so a daemon-less run (CI) doesn't error here.
+    next unless NODEDB_AVAILABLE
+
     conn = ActiveRecord::Base.connection
     begin
       conn.show_tenant("spec_tenant")
