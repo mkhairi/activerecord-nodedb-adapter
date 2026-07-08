@@ -410,12 +410,13 @@ module ActiveRecord
       #   [column_name, type, default, notnull, oid, fmod, collation, comment, identity, attgenerated]
       def column_definitions(table_name)
         result = query(NodeDB::SQL::Collection.describe(table_name), "SCHEMA")
-        result.reject { |row| row[0].to_s.start_with?("__") }.map do |row|
-          field_name  = row[0].to_s
-          nodedb_type = row[1].to_s
-          nullable    = row[2].to_s == "true"
-          pg_type, oid = NodeDB::TypeMap.resolve(nodedb_type)
-          [field_name, pg_type, nil, !nullable, oid, -1, nil, nil, "", ""]
+        rows = result.map do |row|
+          { "field" => row[0].to_s, "type" => row[1].to_s, "nullable" => row[2].to_s }
+        end
+        # Schema.normalize dedupes DESCRIBE's duplicate primary-key rows
+        # (previously two `id` columns reached AR) and filters internals.
+        NodeDB::Schema.normalize(rows).map do |col|
+          [col.name, col.pg_type, nil, !col.nullable, col.oid, -1, nil, nil, "", ""]
         end
       end
 

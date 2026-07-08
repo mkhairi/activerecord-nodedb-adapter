@@ -209,4 +209,20 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
       expect(conn.select_all("SELECT id FROM #{name} WHERE id = 'row1'").to_a).to be_empty
     end
   end
+
+  describe "#columns via Schema.normalize", :integration do
+    let(:name) { "cols_spec_#{SecureRandom.hex(4)}" }
+
+    after { conn.drop_collection(name, if_exists: true) }
+
+    it "dedupes DESCRIBE's duplicate primary-key rows" do
+      conn.create_collection(name, engine: :document_strict) do |t|
+        t.column :id, "TEXT PRIMARY KEY"
+        t.text :label
+      end
+
+      names = conn.columns(name).map(&:name)
+      expect(names).to eq(%w[id label]) # previously id appeared twice
+    end
+  end
 end
