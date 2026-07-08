@@ -9,7 +9,7 @@ require "securerandom"
 RSpec.describe "ActiveRecord over transport: native", :integration do
   def native_up?
     Socket.tcp("localhost", 6433, connect_timeout: 1) { true }
-  rescue StandardError
+  rescue
     false
   end
 
@@ -20,13 +20,13 @@ RSpec.describe "ActiveRecord over transport: native", :integration do
     skip "NodeDB native port 6433 unreachable" unless native_up?
 
     ActiveRecord::Base.establish_connection(
-      adapter:   "nodedb",
+      adapter: "nodedb",
       transport: "native",
-      host:      "localhost",
-      port:      6433,
-      database:  NodedbHelper::NODEDB_URL[%r{/([^/?]+)}, 1] || "nodedb_test",
-      username:  "nodedb",
-      password:  NodedbHelper::SUPERUSER_PASSWORD
+      host: "localhost",
+      port: 6433,
+      database: NodedbHelper::NODEDB_URL[%r{/([^/?]+)}, 1] || "nodedb_test",
+      username: "nodedb",
+      password: NodedbHelper::SUPERUSER_PASSWORD
     )
   end
 
@@ -49,7 +49,13 @@ RSpec.describe "ActiveRecord over transport: native", :integration do
     end)
   end
 
-  after { conn.drop_collection(coll, if_exists: true) rescue nil }
+  after {
+    begin
+      conn.drop_collection(coll, if_exists: true)
+    rescue
+      nil
+    end
+  }
 
   it "is connected through the native shim" do
     raw = conn.send(:any_raw_connection)
@@ -80,14 +86,14 @@ RSpec.describe "ActiveRecord over transport: native", :integration do
     NativeWidget.create!(id: "d1", name: "delta", score: 5)
     rows = conn.select_all("SELECT * FROM #{coll}")
     # document_strict stores the row as a JSON `data` blob (same over pgwire).
-    expect(rows.rows.flatten.join).to include("delta")
+    expect(rows.rows.join).to include("delta")
   end
 
   # BUG-022 (resolved upstream) — native SHOW now
   # routes through the DDL router, so the ops helpers return real row
   # sets, not the old `{"setting" => ""}` placeholder.
-  { show_stats: %w[name value], show_metrics: %w[name value],
-    show_memory: %w[engine allocated_bytes] }.each do |op, expected_keys|
+  {show_stats: %w[name value], show_metrics: %w[name value],
+   show_memory: %w[engine allocated_bytes]}.each do |op, expected_keys|
     it "returns real rows for #{op} over native" do
       rows = conn.public_send(op)
       expect(rows).not_to be_empty

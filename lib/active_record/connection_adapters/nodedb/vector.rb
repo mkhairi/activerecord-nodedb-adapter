@@ -16,7 +16,7 @@ module NodeDB
 
     class_methods do
       def vector_column(name, dim:, metric: :cosine)
-        _vector_columns[name.to_sym] = { dim: dim, metric: metric }
+        _vector_columns[name.to_sym] = {dim: dim, metric: metric}
       end
 
       # Returns an Array of Hashes with keys "id", "surrogate", "distance".
@@ -28,17 +28,17 @@ module NodeDB
       # Note: SEARCH parser rejects quoted identifiers — bare names required.
       def search_vector(column, embedding, limit: 10, filter: nil)
         sql = NodeDB::SQL::Vector.search(
-          table:     table_name,
-          column:    column.to_s,
+          table: table_name,
+          column: column.to_s,
           embedding: embedding,
-          limit:     limit,
-          filter:    filter
+          limit: limit,
+          filter: filter
         )
         connection.select_all(sql).map do |row|
           {
-            "id"        => row["id"],
+            "id" => row["id"],
             "surrogate" => row["_surrogate"] && Integer(row["_surrogate"]),
-            "distance"  => row["distance"]&.to_f
+            "distance" => row["distance"]&.to_f
           }
         end
       end

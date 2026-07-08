@@ -13,13 +13,13 @@ module Nodedb
       argument :column, type: :string, banner: "column"
 
       class_option :dim, type: :numeric, required: true,
-                         desc: "Vector dimension (matches the column's VECTOR(n))"
+        desc: "Vector dimension (matches the column's VECTOR(n))"
       class_option :metric, type: :string, default: "cosine",
-                            desc: "Distance metric (cosine, l2, dot)"
+        desc: "Distance metric (cosine, l2, dot)"
 
       def create_migration_file
         migration_template "migration.rb.tt",
-                           "db/migrate/create_vector_index_#{collection_name}_#{column_name}.rb"
+          "db/migrate/create_vector_index_#{collection_name}_#{column_name}.rb"
       end
 
       private

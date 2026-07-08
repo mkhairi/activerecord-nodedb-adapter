@@ -5,7 +5,7 @@ module ActiveRecord
     # Swap in NodeDB-aware SchemaMigration / InternalMetadata when the pool's
     # adapter is NodeDB. Other adapters keep the standard AR classes.
     class ConnectionPool
-      alias_method :_orig_schema_migration,  :schema_migration
+      alias_method :_orig_schema_migration, :schema_migration
       alias_method :_orig_internal_metadata, :internal_metadata
 
       def schema_migration

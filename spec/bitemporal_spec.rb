@@ -14,8 +14,9 @@ RSpec.describe NodeDB::Bitemporal, :integration do
     tname = name
     model = Class.new(ActiveRecord::Base) do
       include NodeDB::Bitemporal
-      self.table_name         = tname
-      self.primary_key        = "id"
+
+      self.table_name = tname
+      self.primary_key = "id"
       self.inheritance_column = :_type_disabled
     end
     stub_const("BtOrder", model)

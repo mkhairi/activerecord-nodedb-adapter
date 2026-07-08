@@ -13,9 +13,10 @@ RSpec.describe NodeDB::FullTextSearch, :integration do
 
     tname = collection_name
     model_class = Class.new(ActiveRecord::Base) do
-      self.table_name  = tname
+      self.table_name = tname
       self.primary_key = "id"
       include NodeDB::FullTextSearch
+
       fts_column :body
     end
     stub_const("TestPost", model_class)

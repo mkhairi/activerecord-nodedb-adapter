@@ -20,10 +20,10 @@ module ActiveRecord
         # Engine -> migration helper name
         ENGINE_HELPER = {
           "document_strict" => "create_document_strict",
-          "timeseries"      => "create_timeseries",
-          "kv"              => "create_kv",
-          "columnar"        => "create_columnar",
-          "spatial"         => "create_spatial"
+          "timeseries" => "create_timeseries",
+          "kv" => "create_kv",
+          "columnar" => "create_columnar",
+          "spatial" => "create_spatial"
         }.freeze
 
         INTERNAL_TABLES = %w[schema_migrations ar_internal_metadata].freeze
@@ -55,7 +55,7 @@ module ActiveRecord
           if user_columns.any?
             stream.puts " do |t|"
             user_columns.each do |field, type|
-              stream.puts %{    t.column #{field.to_sym.inspect}, #{type.inspect}}
+              stream.puts %(    t.column #{field.to_sym.inspect}, #{type.inspect})
             end
             stream.puts "  end"
           else

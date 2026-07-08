@@ -77,7 +77,7 @@ module ActiveRecord
 
           @pool.with_connection do |connection|
             row = connection.execute("SELECT id, value FROM #{table_name}")
-                            .find { |r| r["id"] == key.to_s }
+              .find { |r| r["id"] == key.to_s }
             row && row["value"]
           end
         end

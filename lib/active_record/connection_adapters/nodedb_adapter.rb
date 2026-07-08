@@ -121,7 +121,7 @@ module ActiveRecord
       def get_database_version
         query_value("SELECT current_setting('server_version_num')", "SCHEMA").to_i.nonzero? ||
           FALLBACK_DATABASE_VERSION
-      rescue StandardError
+      rescue
         FALLBACK_DATABASE_VERSION
       end
 
@@ -135,7 +135,8 @@ module ActiveRecord
       end
 
       # Suppress the minimum-version check entirely.
-      def check_version; end
+      def check_version
+      end
 
       def supports_extensions?
         false
@@ -166,10 +167,10 @@ module ActiveRecord
       # idiomatic Ruby on read and serialise Ruby into NodeDB literals on write.
       def initialize_type_map(m = type_map)
         super
-        m.register_type "vector"   do |sql_type| Nodedb::Type::Vector.new(sql_type: sql_type) end
-        m.register_type "geometry" do |sql_type| Nodedb::Type::Geometry.new(sql_type: sql_type) end
-        m.register_type "json"     do            Nodedb::Type::Json.new                end
-        m.register_type "jsonb"    do            Nodedb::Type::Json.new                end
+        m.register_type("vector") { |sql_type| Nodedb::Type::Vector.new(sql_type: sql_type) }
+        m.register_type("geometry") { |sql_type| Nodedb::Type::Geometry.new(sql_type: sql_type) }
+        m.register_type("json") { Nodedb::Type::Json.new }
+        m.register_type("jsonb") { Nodedb::Type::Json.new }
       end
 
       # Quote NodeDB-friendly literals for engine-specific Ruby values.
@@ -182,7 +183,7 @@ module ActiveRecord
         case value
         when Array
           if value.all? { |v| v.is_a?(Numeric) }
-            "'[" + value.map(&:to_s).join(", ") + "]'"
+            "'[" + value.join(", ") + "]'"
           else
             super
           end
@@ -221,10 +222,21 @@ module ActiveRecord
       #   SHOW STATS   — high-level server counters
       #   SHOW METRICS — extended counters (Prometheus-style)
       #   SHOW MEMORY  — per-engine memory budget snapshot
-      def show_roles;   show_command("SHOW ROLES");   end
-      def show_stats;   show_command("SHOW STATS");   end
-      def show_metrics; show_command("SHOW METRICS"); end
-      def show_memory;  show_command("SHOW MEMORY");  end
+      def show_roles
+        show_command("SHOW ROLES")
+      end
+
+      def show_stats
+        show_command("SHOW STATS")
+      end
+
+      def show_metrics
+        show_command("SHOW METRICS")
+      end
+
+      def show_memory
+        show_command("SHOW MEMORY")
+      end
 
       # SHOW TENANT <id|name> — single tenant snapshot. Returns Hash row or nil.
       # Pass an Integer for id lookup, or a String for name lookup. NodeDB
@@ -257,14 +269,14 @@ module ActiveRecord
       # and SHOW TENANTS WITH NAME. NodeDB consumes these as bare keywords,
       # so any user-supplied value is interpolated literally — restrict to
       # ASCII alnum plus `_` and `-`, leading char alnum or `_`.
-      TENANT_IDENTIFIER_RE = /\A[A-Za-z0-9_][A-Za-z0-9_\-]*\z/
+      TENANT_IDENTIFIER_RE = /\A[A-Za-z0-9_][A-Za-z0-9_-]*\z/
 
       def validate_tenant_identifier!(name)
         return name if TENANT_IDENTIFIER_RE.match?(name)
 
         raise ArgumentError,
-              "tenant identifier #{name.inspect} contains characters outside " \
-              "the safe set [A-Za-z0-9_-] (leading char must be alnum or _)"
+          "tenant identifier #{name.inspect} contains characters outside " \
+          "the safe set [A-Za-z0-9_-] (leading char must be alnum or _)"
       end
       private :validate_tenant_identifier!
 
@@ -276,8 +288,8 @@ module ActiveRecord
         sql =
           case value
           when nil, :default, "default" then "SET TENANT = DEFAULT"
-          when Integer                  then "SET TENANT = #{value}"
-          else                               "SET TENANT = #{quote(value.to_s)}"
+          when Integer then "SET TENANT = #{value}"
+          else "SET TENANT = #{quote(value.to_s)}"
           end
         execute(sql)
         nil
@@ -411,7 +423,7 @@ module ActiveRecord
       def column_definitions(table_name)
         result = query(NodeDB::SQL::Collection.describe(table_name), "SCHEMA")
         rows = result.map do |row|
-          { "field" => row[0].to_s, "type" => row[1].to_s, "nullable" => row[2].to_s }
+          {"field" => row[0].to_s, "type" => row[1].to_s, "nullable" => row[2].to_s}
         end
         # Schema.normalize dedupes DESCRIBE's duplicate primary-key rows
         # (previously two `id` columns reached AR) and filters internals.

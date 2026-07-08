@@ -17,8 +17,8 @@ RSpec.describe NodeDB::Graph, :integration do
     conn.execute(
       "INSERT INTO #{collection_name} (id, name) VALUES ('alice', 'Alice'), ('bob', 'Bob'), ('carol', 'Carol')"
     )
-    TestSocial.graph_insert_edge(from: "alice", to: "bob",   type: "knows", properties: { since: 2020 })
-    TestSocial.graph_insert_edge(from: "bob",   to: "carol", type: "knows", properties: { since: 2022 })
+    TestSocial.graph_insert_edge(from: "alice", to: "bob", type: "knows", properties: {since: 2020})
+    TestSocial.graph_insert_edge(from: "bob", to: "carol", type: "knows", properties: {since: 2022})
   end
 
   after(:each) { conn.drop_collection(collection_name, if_exists: true) }

@@ -49,7 +49,7 @@ RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::NativePGCompat do
     end
 
     it "is Enumerable yielding field=>value hashes (add_pg_decoders uses row[\"oid\"])" do
-      expect(result.to_a).to eq([{ "a" => "1", "b" => "x" }, { "a" => "2", "b" => "y" }])
+      expect(result.to_a).to eq([{"a" => "1", "b" => "x"}, {"a" => "2", "b" => "y"}])
       expect(result.filter_map { |r| r["a"] }).to eq(%w[1 2])
     end
   end
@@ -67,7 +67,7 @@ RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::NativePGCompat do
       # Must stay a single `result` cell so NodeDB::Graph#graph_traverse
       # can JSON-parse and unwrap it.
       expect(r.fields).to eq(["result"])
-      expect(r.to_a).to eq([{ "result" => payload }])
+      expect(r.to_a).to eq([{"result" => payload}])
     end
   end
 

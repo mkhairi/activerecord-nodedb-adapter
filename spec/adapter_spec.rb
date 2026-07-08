@@ -142,13 +142,13 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
 
       tname = name
       model = Class.new(ActiveRecord::Base) do
-        self.table_name         = tname
-        self.primary_key        = "id"
+        self.table_name = tname
+        self.primary_key = "id"
         self.inheritance_column = :_type_disabled
       end
       stub_const("DequalModel", model)
       DequalModel.create!(id: "r1", label: "alpha", score: 7)
-      DequalModel.create!(id: "r2", label: "beta",  score: 3)
+      DequalModel.create!(id: "r2", label: "beta", score: 3)
     end
 
     after { conn.drop_collection(name, if_exists: true) }
@@ -191,8 +191,8 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
 
       tname = name
       model = Class.new(ActiveRecord::Base) do
-        self.table_name        = tname
-        self.primary_key       = "id"
+        self.table_name = tname
+        self.primary_key = "id"
         self.inheritance_column = :_type_disabled
       end
       stub_const("TxnDeleteModel", model)

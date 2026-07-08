@@ -7,9 +7,9 @@ module ActiveRecord
         # possible; custom NodeDB types come through as unknown and are mapped
         # here by name.
         NODEDB_TYPE_MAP = {
-          "vector"   => :vector,
+          "vector" => :vector,
           "geometry" => :geometry,
-          "graph"    => :graph
+          "graph" => :graph
         }.freeze
 
         def initialize(name, default, sql_type_metadata = nil, null = true, **kwargs)
