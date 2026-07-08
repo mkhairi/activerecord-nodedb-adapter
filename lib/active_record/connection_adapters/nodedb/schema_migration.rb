@@ -65,10 +65,10 @@ module ActiveRecord
             integer = connection.quote(version.to_i.to_s)
             clauses = ["id = #{literal}", "id = #{integer}"]
             if version.to_s.match?(/\A\d+\z/)
-              clauses << "id = #{connection.quote(format('%03d', version.to_i))}"
+              clauses << "id = #{connection.quote(format("%03d", version.to_i))}"
             end
             connection.execute(
-              "DELETE FROM #{table_name} WHERE #{clauses.uniq.join(' OR ')}"
+              "DELETE FROM #{table_name} WHERE #{clauses.uniq.join(" OR ")}"
             )
           end
         end

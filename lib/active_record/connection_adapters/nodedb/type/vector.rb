@@ -17,22 +17,25 @@ module ActiveRecord
             @dim = dim || extract_dim(sql_type)
           end
 
-          def type        = :vector
+          def type = :vector
           def serializable?(value) = value.nil? || value.is_a?(Array) || value.is_a?(String)
 
           def cast(value)
             case value
-            when nil          then nil
-            when Array        then value.map(&:to_f)
-            when String       then JSON.parse(value).map(&:to_f) rescue nil
-            else                   nil
+            when nil then nil
+            when Array then value.map(&:to_f)
+            when String then begin
+              JSON.parse(value).map(&:to_f)
+            rescue
+              nil
+            end
             end
           end
 
           def serialize(value)
             return nil if value.nil?
             arr = cast(value) or return nil
-            "[" + arr.map(&:to_s).join(", ") + "]"
+            "[" + arr.join(", ") + "]"
           end
 
           private

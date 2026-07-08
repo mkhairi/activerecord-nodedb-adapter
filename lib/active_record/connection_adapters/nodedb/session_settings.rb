@@ -31,7 +31,11 @@ module ActiveRecord
         private
 
         def current_setting(key)
-          row = execute("SHOW #{key}").to_a.first rescue nil
+          row = begin
+            execute("SHOW #{key}").to_a.first
+          rescue
+            nil
+          end
           row&.values&.first
         end
 

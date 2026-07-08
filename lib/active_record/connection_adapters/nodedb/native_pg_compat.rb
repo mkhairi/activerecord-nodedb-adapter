@@ -24,8 +24,8 @@ module ActiveRecord
           # resolved), so the wrapper is a straight shape adapter with no
           # blob normalisation.
           def initialize(native_result)
-            @columns    = native_result.fields
-            @rows       = native_result.values
+            @columns = native_result.fields
+            @rows = native_result.values
             @cmd_tuples = native_result.cmd_tuples
           end
 
@@ -33,7 +33,7 @@ module ActiveRecord
           def values = @rows
           def ntuples = @rows.length
           def nfields = @columns.length
-          def cmd_tuples = @cmd_tuples
+          attr_reader :cmd_tuples
           def ftype(_index) = TEXT_OID
           def fmod(_index) = -1
           def getvalue(row, col) = @rows.dig(row, col)
@@ -79,8 +79,8 @@ module ActiveRecord
           track_txn(sql)
           Result.new(translate { @native.run(sql) })
         end
-        alias exec async_exec
-        alias query async_exec
+        alias_method :exec, :async_exec
+        alias_method :query, :async_exec
 
         def exec_params(sql, binds)
           track_txn(sql)
@@ -95,7 +95,11 @@ module ActiveRecord
 
         def reset
           params = @native.respond_to?(:connection_parameters) ? @native.connection_parameters : nil
-          @native.close rescue nil
+          begin
+            @native.close
+          rescue
+            nil
+          end
           raise ::PG::ConnectionBad, "native connection cannot be reset" unless params
 
           @native = NodeDB::Native::Connection.connect(**params)
@@ -112,7 +116,7 @@ module ActiveRecord
         # standard_conforming_strings is on, so a SQL string literal only
         # needs its single quotes doubled.
         def escape(str) = str.to_s.gsub("'", "''")
-        alias escape_string escape
+        alias_method :escape_string, :escape
 
         # PG#escape_identifier returns the identifier already wrapped in
         # double quotes, with embedded quotes doubled.
@@ -120,10 +124,15 @@ module ActiveRecord
 
         # ── configure_connection surface (no-ops over native) ──────────
         def set_client_encoding(_enc) = nil
-        def type_map_for_queries=(_map); end
-        def type_map_for_results=(_map); end
+
+        def type_map_for_queries=(_map)
+        end
+
+        def type_map_for_results=(_map)
+        end
         attr_reader :type_map_for_results
-        def set_notice_receiver(&_blk); end
+        def set_notice_receiver(&_blk)
+        end
 
         private
 

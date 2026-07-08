@@ -8,16 +8,17 @@ RSpec.describe NodeDB::Vector, :integration do
     conn.create_collection(collection_name)
     conn.create_vector_index(
       "idx_#{collection_name}_emb",
-      on:     collection_name,
+      on: collection_name,
       column: :embedding,
       metric: :cosine,
-      dim:    3
+      dim: 3
     )
 
     tname = collection_name
     model_class = Class.new(ActiveRecord::Base) do
       self.table_name = tname
       include NodeDB::Vector
+
       vector_column :embedding, dim: 3
     end
     stub_const("TestArticle", model_class)

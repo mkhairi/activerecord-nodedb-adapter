@@ -33,15 +33,15 @@ module ActiveRecord
         def create_collection(collection_name, engine: nil, engine_options: {}, bitemporal: false, **options, &block)
           td = create_table_definition(collection_name.to_s, **options)
           td.instance_variable_set(:@engine, engine)
-          block.call(td) if block
+          block&.call(td)
 
           col_strings = td.columns.map { |c| schema_creation.accept(c) }
           sql = NodeDB::SQL::Collection.create(
             collection_name.to_s,
-            engine:         engine,
-            columns:        col_strings,
+            engine: engine,
+            columns: col_strings,
             engine_options: engine_options,
-            flags:          bitemporal ? [:bitemporal] : []
+            flags: bitemporal ? [:bitemporal] : []
           )
           execute_nodedb(sql)
         end
@@ -112,7 +112,7 @@ module ActiveRecord
         # Example:
         #   create_vector_index :idx_articles_emb, on: :articles,
         #     column: :embedding, metric: :cosine, dim: 384
-        def create_vector_index(index_name, on:, column:, metric: :cosine, dim:)
+        def create_vector_index(index_name, on:, column:, dim:, metric: :cosine)
           sql = "CREATE VECTOR INDEX #{index_name} " \
                 "ON #{on} " \
                 "METRIC #{metric.to_s.upcase} DIM #{dim.to_i}"
@@ -128,10 +128,10 @@ module ActiveRecord
 
         def drop_collection(collection_name, if_exists: false)
           sql = if if_exists
-                  NodeDB::SQL::Collection.drop_if_exists(collection_name.to_s)
-                else
-                  NodeDB::SQL::Collection.drop(collection_name.to_s)
-                end
+            NodeDB::SQL::Collection.drop_if_exists(collection_name.to_s)
+          else
+            NodeDB::SQL::Collection.drop(collection_name.to_s)
+          end
           execute_nodedb(sql)
         end
 

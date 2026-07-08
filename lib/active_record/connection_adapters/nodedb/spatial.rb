@@ -17,7 +17,7 @@ module NodeDB
       end
 
       def order_by_distance(lat:, lon:, column: :geom, as: :distance)
-        col  = connection.quote_column_name(column)
+        col = connection.quote_column_name(column)
         expr = NodeDB::SQL::Spatial.distance_expr(column: col, lat: lat, lon: lon, as: as)
         select("*, #{expr}").order(as)
       end

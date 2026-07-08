@@ -10,7 +10,9 @@ RSpec.describe "collection-based advisory locks (BUG-014)", :integration do
   let(:lock_id) { rand(1_000_000..9_999_999) }
 
   after do
-    conn.execute("DELETE FROM #{coll} WHERE id = '#{lock_id}'") rescue nil
+    conn.execute("DELETE FROM #{coll} WHERE id = '#{lock_id}'")
+  rescue
+    nil
   end
 
   it "acquires and releases the lock" do
@@ -67,7 +69,9 @@ RSpec.describe "with_advisory_lock block API (BUG-014)", :integration do
   let(:name) { "spec-lock-#{SecureRandom.hex(4)}" }
 
   after do
-    conn.execute("DELETE FROM #{coll} WHERE id = #{conn.quote(name)}") rescue nil
+    conn.execute("DELETE FROM #{coll} WHERE id = #{conn.quote(name)}")
+  rescue
+    nil
   end
 
   def lock_row
@@ -154,6 +158,10 @@ RSpec.describe "with_advisory_lock block API (BUG-014)", :integration do
     end
   ensure
     ENV["NODEDB_ADVISORY_LOCK_PREFIX"] = original
-    conn.execute("DELETE FROM #{coll} WHERE id = #{conn.quote("myapp:#{name}")}") rescue nil
+    begin
+      conn.execute("DELETE FROM #{coll} WHERE id = #{conn.quote("myapp:#{name}")}")
+    rescue
+      nil
+    end
   end
 end

@@ -171,7 +171,7 @@ module ActiveRecord
           # by someone else between the read and the delete survives.
           execute(
             "DELETE FROM #{ADVISORY_LOCKS_COLLECTION} " \
-            "WHERE id = #{quote(key)} AND owner = #{quote(row['owner'])}"
+            "WHERE id = #{quote(key)} AND owner = #{quote(row["owner"])}"
           )
           true
         end

@@ -22,11 +22,11 @@ module NodeDB
 
     class_methods do
       def fts_column(name, language: "english")
-        _fts_columns[name.to_sym] = { language: language }
+        _fts_columns[name.to_sym] = {language: language}
       end
 
       def fts_search(query, column: _fts_columns.keys.first, limit: 20, fuzzy: false)
-        col   = column.to_s
+        col = column.to_s
         quoted_q = connection.quote(query)
         fuzzy_opts = fuzzy ? ", { fuzzy: true, distance: 2 }" : ""
 
@@ -38,7 +38,7 @@ module NodeDB
               "WHERE text_match(#{col}, #{quoted_q}#{fuzzy_opts}) " \
               "LIMIT #{limit.to_i}"
 
-        connection.select_all(sql).to_a.map { |row| { "id" => row["id"] } }
+        connection.select_all(sql).to_a.map { |row| {"id" => row["id"]} }
       end
     end
   end

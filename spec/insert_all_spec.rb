@@ -26,27 +26,27 @@ RSpec.describe "insert_all / upsert_all", :integration do
   after(:each) { conn.drop_collection(collection_name, if_exists: true) }
 
   it "insert_all! writes multiple rows in one statement" do
-    model.insert_all!([{ id: "a", label: "x" }, { id: "b", label: "y" }])
+    model.insert_all!([{id: "a", label: "x"}, {id: "b", label: "y"}])
     expect(model.order(:id).pluck(:id, :label)).to eq([%w[a x], %w[b y]])
   end
 
   it "insert_all skips conflicting rows and keeps the rest" do
-    model.insert_all!([{ id: "a", label: "x" }])
-    model.insert_all([{ id: "a", label: "dup" }, { id: "c", label: "z" }])
+    model.insert_all!([{id: "a", label: "x"}])
+    model.insert_all([{id: "a", label: "dup"}, {id: "c", label: "z"}])
 
     expect(model.find_by(id: "a").label).to eq("x")
     expect(model.find_by(id: "c").label).to eq("z")
   end
 
   it "upsert_all updates the conflicting row" do
-    model.insert_all!([{ id: "a", label: "x" }])
-    model.upsert_all([{ id: "a", label: "x2" }], unique_by: :id)
+    model.insert_all!([{id: "a", label: "x"}])
+    model.upsert_all([{id: "a", label: "x2"}], unique_by: :id)
 
     expect(model.find_by(id: "a").label).to eq("x2")
   end
 
   it "returns no rows (NodeDB has no RETURNING payload)" do
-    result = model.insert_all!([{ id: "a", label: "x" }])
+    result = model.insert_all!([{id: "a", label: "x"}])
     expect(result.rows).to eq([])
   end
 end

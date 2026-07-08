@@ -13,8 +13,8 @@ module ActiveRecord
             super()
           end
 
-          def type     = :geometry
-          def cast(v)  = v.nil? ? nil : v.to_s
+          def type = :geometry
+          def cast(v) = v&.to_s
           def serialize(v) = cast(v)
         end
       end

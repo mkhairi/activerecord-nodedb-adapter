@@ -25,10 +25,10 @@ module NodeDB
       # single-quoted forms normalize correctly).
       def graph_insert_edge(from:, to:, type:, properties: {})
         sql = NodeDB::SQL::Graph.insert_edge(
-          in_collection:   table_name,
-          from:            connection.quote(from),
-          to:              connection.quote(to),
-          type:            connection.quote(type),
+          in_collection: table_name,
+          from: connection.quote(from),
+          to: connection.quote(to),
+          type: connection.quote(type),
           properties_json: connection.quote(properties.to_json)
         )
         NodeDB::Graph.silence_libpq_noise { connection.execute(sql) }
@@ -40,8 +40,8 @@ module NodeDB
       # The starting node (`from`) is filtered out.
       def graph_traverse(from:, depth: 1, direction: :both)
         sql = NodeDB::SQL::Graph.traverse(
-          from:      connection.quote(from),
-          depth:     depth,
+          from: connection.quote(from),
+          depth: depth,
           direction: direction
         )
         raw = NodeDB::Graph.silence_libpq_noise { connection.select_all(sql) }
@@ -50,8 +50,8 @@ module NodeDB
         ids =
           case payload
           when Array then payload
-          when Hash  then Array(payload["nodes"]).map { |n| n["id"] }.compact
-          else            []
+          when Hash then Array(payload["nodes"]).map { |n| n["id"] }.compact
+          else []
           end
 
         ids - [from.to_s]
@@ -65,9 +65,9 @@ module NodeDB
       def graph_delete_edge(from:, to:, type:)
         sql = NodeDB::SQL::Graph.delete_edge(
           in_collection: table_name,
-          from:          connection.quote(from),
-          to:            connection.quote(to),
-          type:          connection.quote(type)
+          from: connection.quote(from),
+          to: connection.quote(to),
+          type: connection.quote(type)
         )
         NodeDB::Graph.silence_libpq_noise { connection.execute(sql) }
       end
@@ -89,8 +89,8 @@ module NodeDB
       def graph_stats(verbose: false, as_of: nil)
         connection.graph_stats(
           collection: connection.quote(table_name),
-          verbose:    verbose,
-          as_of:      as_of
+          verbose: verbose,
+          as_of: as_of
         )
       end
     end
@@ -99,18 +99,18 @@ module NodeDB
     # lines that don't match LIBPQ_NOISE_RE. Real warnings still surface.
     def self.silence_libpq_noise
       r, w = IO.pipe
-      original = STDERR.dup
-      STDERR.reopen(w)
+      original = $stderr.dup
+      $stderr.reopen(w)
       w.close
       begin
         yield
       ensure
-        STDERR.reopen(original)
+        $stderr.reopen(original)
         original.close
         captured = r.read
         r.close
         captured.each_line do |line|
-          $stderr.write(line) unless line =~ LIBPQ_NOISE_RE
+          $stderr.write(line) unless LIBPQ_NOISE_RE.match?(line)
         end
       end
     end

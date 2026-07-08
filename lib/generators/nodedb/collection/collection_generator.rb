@@ -13,12 +13,12 @@ module Nodedb
       source_root File.expand_path("templates", __dir__)
 
       argument :attributes, type: :array, default: [],
-                            banner: "field:type field:vector{dim}"
+        banner: "field:type field:vector{dim}"
 
       class_option :engine, type: :string, default: nil,
-                            desc: "NodeDB engine (document, document_strict, timeseries, kv, columnar, spatial)"
+        desc: "NodeDB engine (document, document_strict, timeseries, kv, columnar, spatial)"
       class_option :bitemporal, type: :boolean, default: false,
-                                desc: "Add the BITEMPORAL collection modifier"
+        desc: "Add the BITEMPORAL collection modifier"
 
       # Rails' attribute parser only understands type{n} for built-in
       # types, so pull the dim out of field:vector{384} before NamedBase
@@ -38,7 +38,7 @@ module Nodedb
 
       def create_migration_file
         migration_template "migration.rb.tt",
-                           "db/migrate/create_#{collection_name}.rb"
+          "db/migrate/create_#{collection_name}.rb"
       end
 
       private
@@ -62,7 +62,7 @@ module Nodedb
         case attribute.type
         when :vector
           dim = @vector_dims[attribute.name] ||
-                raise(Thor::Error, "vector column #{attribute.name} needs a dim: use #{attribute.name}:vector{384}")
+            raise(Thor::Error, "vector column #{attribute.name} needs a dim: use #{attribute.name}:vector{384}")
           "t.vector :#{attribute.name}, dim: #{dim}"
         else
           "t.#{attribute.type} :#{attribute.name}"

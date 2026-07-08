@@ -39,8 +39,8 @@ module NodeDB
         if ttl
           sql = NodeDB::SQL::KV.set_ttl(
             table: table_name,
-            key:   connection.quote(key),
-            ttl:   ttl
+            key: connection.quote(key),
+            ttl: ttl
           )
           connection.execute(sql)
         end

@@ -9,12 +9,14 @@ require "securerandom"
 RSpec.describe "NodeDB-aware InternalMetadata (BUG-033 shapes)", :integration do
   let(:pool) { ActiveRecord::Base.connection_pool }
   let(:meta) { pool.internal_metadata }
-  let(:key)  { "spec_key_#{SecureRandom.hex(4)}" }
+  let(:key) { "spec_key_#{SecureRandom.hex(4)}" }
 
   after do
     ActiveRecord::Base.connection.execute(
-      "DELETE FROM ar_internal_metadata WHERE id = '#{key}'"
-    ) rescue nil
+    "DELETE FROM ar_internal_metadata WHERE id = '#{key}'"
+  )
+  rescue
+    nil
   end
 
   it "survives the migrator's miss -> set -> read cycle on one connection" do
