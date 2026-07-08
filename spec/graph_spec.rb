@@ -48,6 +48,23 @@ RSpec.describe NodeDB::Graph, :integration do
     expect(row["labels"].to_s).to include("knows")
   end
 
+  it "deletes an edge (IN-clause form current upstream requires)" do
+    # Unique node ids: GRAPH TRAVERSE is tenant-wide (no IN clause), so
+    # reused ids like alice/bob see stale edges from long-dropped
+    # collections. Deletion is asserted through this collection's
+    # scoped stats counter plus a traverse over ids nothing else used.
+    x = "x_#{SecureRandom.hex(4)}"
+    y = "y_#{SecureRandom.hex(4)}"
+    conn.execute("INSERT INTO #{collection_name} (id, name) VALUES ('#{x}', 'X'), ('#{y}', 'Y')")
+    TestSocial.graph_insert_edge(from: x, to: y, type: "temp")
+    expect(TestSocial.graph_traverse(from: x, depth: 1)).to include(y)
+
+    TestSocial.graph_delete_edge(from: x, to: y, type: "temp")
+
+    expect(TestSocial.graph_stats.first["edge_count"].to_i).to eq(2)
+    expect(TestSocial.graph_traverse(from: x, depth: 1)).not_to include(y)
+  end
+
   it "exposes the per-label breakdown via #graph_stats verbose form" do
     rows = TestSocial.graph_stats(verbose: true)
 

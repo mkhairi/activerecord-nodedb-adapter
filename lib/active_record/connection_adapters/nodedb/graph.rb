@@ -64,9 +64,10 @@ module NodeDB
 
       def graph_delete_edge(from:, to:, type:)
         sql = NodeDB::SQL::Graph.delete_edge(
-          from: connection.quote(from),
-          to:   connection.quote(to),
-          type: connection.quote(type)
+          in_collection: table_name,
+          from:          connection.quote(from),
+          to:            connection.quote(to),
+          type:          connection.quote(type)
         )
         NodeDB::Graph.silence_libpq_noise { connection.execute(sql) }
       end
