@@ -95,6 +95,17 @@ adapter ships NodeDB-aware `SchemaMigration` and `InternalMetadata`
 classes (see *Schema migrations* below) so AR can track applied
 migrations as a regular `schema_migrations` collection.
 
+### `transport: native`
+
+Setting `transport: native` in `database.yml` routes the connection
+through a hand-rolled native client instead of libpq/pgwire — see
+`docs/KNOWN_ISSUES.md` for parity status. That native socket is
+plaintext TCP with no TLS support. If `database.yml` sets
+`sslmode: require|verify-ca|verify-full`, or any of `sslcert`,
+`sslkey`, `sslrootcert`, the adapter raises at connect rather than
+silently downgrading to an unencrypted connection. Use the default
+pgwire transport (libpq) when TLS is required.
+
 ## Engines
 
 ### Vector search
