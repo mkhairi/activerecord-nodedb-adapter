@@ -95,22 +95,33 @@ module NodeDB
       end
     end
 
+    SILENCE_MUTEX = Mutex.new
+    private_constant :SILENCE_MUTEX
+
     # Redirect fd 2 to a pipe, run the block, then re-emit any captured
     # lines that don't match LIBPQ_NOISE_RE. Real warnings still surface.
+    # Serialized process-wide: libpq writes to fd 2 from C, so redirection
+    # is global; the mutex stops concurrent calls clobbering each other,
+    # and the drain thread keeps a chatty block from filling the pipe.
+    # ponytail: global mutex; revisit if graph QPS matters
     def self.silence_libpq_noise
-      r, w = IO.pipe
-      original = $stderr.dup
-      $stderr.reopen(w)
-      w.close
-      begin
-        yield
-      ensure
-        $stderr.reopen(original)
-        original.close
-        captured = r.read
-        r.close
-        captured.each_line do |line|
-          $stderr.write(line) unless LIBPQ_NOISE_RE.match?(line)
+      SILENCE_MUTEX.synchronize do
+        r, w = IO.pipe
+        drained = +""
+        drainer = Thread.new { drained << r.read }
+        original = $stderr.dup
+        $stderr.reopen(w)
+        w.close
+        begin
+          yield
+        ensure
+          $stderr.reopen(original)
+          original.close
+          drainer.join
+          r.close
+          drained.each_line do |line|
+            $stderr.write(line) unless LIBPQ_NOISE_RE.match?(line)
+          end
         end
       end
     end
