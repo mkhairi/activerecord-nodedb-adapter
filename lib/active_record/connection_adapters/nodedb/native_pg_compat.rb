@@ -55,7 +55,7 @@ module ActiveRecord
           def coders = []
         end
 
-        TXN_RE = /\A\s*(BEGIN|START\s+TRANSACTION|COMMIT|END|ROLLBACK)/i
+        TXN_RE = /\A\s*(BEGIN|START\s+TRANSACTION|COMMIT|END|ROLLBACK(?!\s+TO\b))\b/i
 
         def self.connect(conn_params)
           native = NodeDB::Native::Connection.connect(
