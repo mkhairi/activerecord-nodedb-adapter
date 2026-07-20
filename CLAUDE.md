@@ -28,8 +28,8 @@ bundle exec rspec
 
 Requires a live NodeDB on `localhost:6432` (and `:6433` for the native
 transport specs); the suite targets the **default `nodedb` database**
-(CREATE DATABASE'd databases are unusable upstream — BUG-032;
-`NODEDB_URL` overrides). Must stay 0 failures, 0 pending before any PR
+by convention (CREATE DATABASE'd databases were unusable for most of
+the alpha — BUG-032, since fixed upstream; `NODEDB_URL` overrides). Must stay 0 failures, 0 pending before any PR
 merges. New behaviour requires a spec; new NodeDB workaround requires
 a spec that asserts the workaround's effect (not just "doesn't
 crash").
