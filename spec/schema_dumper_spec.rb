@@ -45,8 +45,8 @@ RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
   end
 
   it "emits bitemporal: true for bitemporal collections (and not for plain ones)" do
-    bt = "bt_dump_#{SecureRandom.hex(4)}"
-    plain = "plain_dump_#{SecureRandom.hex(4)}"
+    bt = "kept_dump_bt_#{SecureRandom.hex(4)}"
+    plain = "kept_dump_plain_#{SecureRandom.hex(4)}"
     conn.create_collection(bt, engine: :document_strict, bitemporal: true) do |t|
       t.text :action
     end
@@ -83,6 +83,24 @@ RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
   ensure
     ActiveRecord::SchemaDumper.ignore_tables = previous if previous
     [leaked, app_ignored, kept].each { |name| conn.drop_collection(name, if_exists: true) }
+  end
+
+  it "keeps the explicit id PRIMARY KEY column but drops the synthetic id" do
+    explicit = "kept_dump_#{SecureRandom.hex(4)}"
+    synthetic = "kept_dump_#{SecureRandom.hex(4)}"
+    conn.execute("CREATE COLLECTION #{explicit} (id TEXT PRIMARY KEY, name TEXT) WITH (engine='document_strict')")
+    conn.execute("CREATE COLLECTION #{synthetic} (name TEXT) WITH (engine='document_strict')")
+
+    stream = StringIO.new
+    conn.create_schema_dumper({}).dump(stream)
+    explicit_block = stream.string[/create_document_strict "#{explicit}".*?end/m]
+    synthetic_block = stream.string[/create_document_strict "#{synthetic}".*?end/m]
+
+    expect(explicit_block).to include(%(t.column :id, "TEXT PRIMARY KEY"))
+    expect(synthetic_block).not_to include(":id")
+  ensure
+    conn.drop_collection(explicit, if_exists: true)
+    conn.drop_collection(synthetic, if_exists: true)
   end
 
   it "dumps without raising and omits collections it cannot DESCRIBE" do

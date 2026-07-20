@@ -38,8 +38,11 @@ module ActiveRecord
         # via ActiveRecord::SchemaDumper.ignore_tables (strings or
         # regexps, honored below like the stock dumper).
         SPEC_LEAK_PATTERNS = [
-          /\Abt_spec_/, /\Adequal_/, /\Anv_native_/, /\Asmoke_/,
-          /\Atest_adapter_/, /\Atest_ia_/, /\Atest_metrics_/, /\Atest_social_/
+          /\Abt_spec_/, /\Abt_dump_/, /\Acols_spec_/, /\Adequal_/,
+          /\Amyapp_tmp_/, /\Anv_native_/, /\Aplain_dump_/,
+          /\Asmoke_/, /\Atest_adapter_/, /\Atest_articles_/, /\Atest_ia_/,
+          /\Atest_metrics_/, /\Atest_posts_/, /\Atest_social_/,
+          /\Avquery_bypass_/
         ].freeze
 
         # Override Rails' `tables(stream)` step — emit our own DSL for each
@@ -101,19 +104,26 @@ module ActiveRecord
 
         def extract_user_columns(rows)
           # Drop:
-          #  - the first synthetic `id TEXT (false)` row (NodeDB internal)
+          #  - the synthetic `id TEXT (false)` row (NodeDB internal — DESCRIBE
+          #    types it plain TEXT; a reloaded collection must NOT redeclare it,
+          #    and the synthetic id rejects inserts anyway)
           #  - any `__*` markers (__storage, __collection_type, __kv_key)
           #
-          # Keep the explicit `id ... PRIMARY KEY` row when present.
+          # Keep the explicit `id ... PRIMARY KEY` row (typed "TEXT PRIMARY
+          # KEY" by DESCRIBE): dropping it dumps a collection whose reload
+          # gets only the synthetic id, and every INSERT naming `id` then
+          # fails with "unknown field 'id' not present in strict schema".
           seen_internal_id = false
           rows.filter_map do |row|
             field = row["field"].to_s
+            type = row["type"].to_s
             next if field.start_with?("__")
-            if field == "id" && !seen_internal_id && row["nullable"] == "false"
+            if field == "id" && !seen_internal_id && row["nullable"] == "false" &&
+                !type.include?("PRIMARY KEY")
               seen_internal_id = true
               next
             end
-            [field, row["type"].to_s]
+            [field, type]
           end
         end
       end

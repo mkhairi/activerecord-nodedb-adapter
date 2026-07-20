@@ -41,8 +41,9 @@ module NodedbHelper
   # sync with SchemaDumper::SPEC_LEAK_PATTERNS (the dumper-side safety
   # net for the shared default database).
   SPEC_COLLECTION_PREFIXES = %w[
-    bt_spec_ bt_dump_ plain_dump_ dequal_ nv_native_
-    test_adapter_ test_ia_ test_metrics_ test_social_
+    bt_spec_ bt_dump_ cols_spec_ dequal_ kept_dump_ myapp_tmp_
+    nv_native_ plain_dump_ test_adapter_ test_articles_ test_ia_
+    test_metrics_ test_posts_ test_social_ vquery_bypass_
   ].freeze
 
   # Drop collections leaked by earlier interrupted runs so they neither
