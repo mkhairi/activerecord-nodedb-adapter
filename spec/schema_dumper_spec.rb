@@ -64,6 +64,27 @@ RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
     conn.drop_collection(plain, if_exists: true)
   end
 
+  it "skips known spec-leak prefixes and honors ActiveRecord::SchemaDumper.ignore_tables" do
+    leaked = "bt_spec_#{SecureRandom.hex(4)}"
+    app_ignored = "myapp_tmp_#{SecureRandom.hex(4)}"
+    kept = "kept_dump_#{SecureRandom.hex(4)}"
+    [leaked, app_ignored, kept].each do |name|
+      conn.execute("CREATE COLLECTION #{name} (id TEXT PRIMARY KEY) WITH (engine='document_strict')")
+    end
+
+    previous = ActiveRecord::SchemaDumper.ignore_tables
+    ActiveRecord::SchemaDumper.ignore_tables = previous + [/\Amyapp_tmp_/]
+    stream = StringIO.new
+    conn.create_schema_dumper({}).dump(stream)
+
+    expect(stream.string).not_to include(leaked)
+    expect(stream.string).not_to include(app_ignored)
+    expect(stream.string).to include(kept)
+  ensure
+    ActiveRecord::SchemaDumper.ignore_tables = previous if previous
+    [leaked, app_ignored, kept].each { |name| conn.drop_collection(name, if_exists: true) }
+  end
+
   it "dumps without raising and omits collections it cannot DESCRIBE" do
     listed = conn.execute("SHOW COLLECTIONS").to_a.map { |r| r["name"] }
     expect(listed).to include("spec_tenant_scratch") # precondition: daemon-wide listing

@@ -31,11 +31,26 @@ module ActiveRecord
         # lock itself, so a dumped block always collides on db:schema:load.
         INTERNAL_TABLES = %w[schema_migrations ar_internal_metadata ar_advisory_locks].freeze
 
+        # Dev/test/spec runs share the single default nodedb database
+        # (CREATE DATABASE is unusable upstream), so collections leaked by
+        # an interrupted suite run would get baked into schema.rb. Ignore
+        # this stack's spec/smoke prefixes by default; apps add their own
+        # via ActiveRecord::SchemaDumper.ignore_tables (strings or
+        # regexps, honored below like the stock dumper).
+        SPEC_LEAK_PATTERNS = [
+          /\Abt_spec_/, /\Adequal_/, /\Anv_native_/, /\Asmoke_/,
+          /\Atest_adapter_/, /\Atest_ia_/, /\Atest_metrics_/, /\Atest_social_/
+        ].freeze
+
         # Override Rails' `tables(stream)` step — emit our own DSL for each
         # NodeDB collection.
         def tables(stream)
           collections = @connection.collections.sort - INTERNAL_TABLES
-          collections.each { |name| dump_collection(name, stream) }
+          collections.each do |name|
+            next if ignored?(name) || SPEC_LEAK_PATTERNS.any? { |p| p.match?(name) }
+
+            dump_collection(name, stream)
+          end
         end
 
         private
