@@ -106,25 +106,6 @@ module ActiveRecord
         false
       end
 
-      # Override: NodeDB doesn't send a numeric-parseable server_version
-      # ParameterStatus, so libpq's PQserverVersion() returns 0 and the pg
-      # gem raises PG::ConnectionBad (BUG-003). Ask the server directly —
-      # current NodeDB answers current_setting('server_version_num')
-      # (e.g. 150000); fall back to a PostgreSQL 16.0-equivalent constant
-      # on older builds where that setting is empty.
-      FALLBACK_DATABASE_VERSION = 160000
-
-      def database_version
-        @database_version ||= get_database_version
-      end
-
-      def get_database_version
-        query_value("SELECT current_setting('server_version_num')", "SCHEMA").to_i.nonzero? ||
-          FALLBACK_DATABASE_VERSION
-      rescue
-        FALLBACK_DATABASE_VERSION
-      end
-
       # NodeDB doesn't answer `SHOW max_identifier_length` on any
       # transport — pgwire errors with "unrecognized configuration
       # parameter", which crashes AR's grouped calculations
@@ -132,10 +113,6 @@ module ActiveRecord
       # PostgreSQL's default.
       def max_identifier_length
         63
-      end
-
-      # Suppress the minimum-version check entirely.
-      def check_version
       end
 
       def supports_extensions?
