@@ -26,10 +26,6 @@ upper-bound compares, timeseries restart replay, and DESCRIBE output
 
 You write idiomatic AR; the adapter swallows the workaround:
 
-- **BUG-003 — `PQserverVersion()` raises.** libpq can't parse the
-  `server_version` ParameterStatus (`NodeDB 0.3.0`). The adapter asks
-  the server via `current_setting('server_version_num')` (fallback
-  constant for older builds) and no-ops `check_version`.
 - **BUG-007 / BUG-019 — pg_catalog introspection gaps.**
   `current_schemas()` returns an empty cell and the `pg_range` /
   `pg_attrdef` vtables are missing, so AR's `tables`,

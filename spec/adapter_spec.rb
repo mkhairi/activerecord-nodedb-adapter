@@ -11,20 +11,20 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
     expect(conn.nodedb_version).to match(/\d+\.\d+/)
   end
 
-  describe "#database_version (BUG-003 workaround)", :integration do
-    it "derives the version from the server's server_version_num setting" do
-      reported = conn.query_value("SELECT current_setting('server_version_num')", "SCHEMA").to_i
+  describe "#database_version", :integration do
+    it "uses the stock libpq PQserverVersion() path (BUG-043 fixed upstream)" do
+      libpq_version = conn.instance_variable_get(:@raw_connection).server_version
 
-      if reported.positive?
-        expect(conn.get_database_version).to eq(reported)
-      else
-        expect(conn.get_database_version)
-          .to eq(described_class::FALLBACK_DATABASE_VERSION)
-      end
+      expect(libpq_version).to be > 0
+      expect(conn.get_database_version).to eq(libpq_version)
     end
 
     it "returns a version high enough for AR's PostgreSQL feature guards" do
       expect(conn.database_version).to be >= 120000
+    end
+
+    it "passes the stock minimum-version check" do
+      expect { conn.check_version }.not_to raise_error
     end
   end
 
