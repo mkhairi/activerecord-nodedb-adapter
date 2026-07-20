@@ -2,7 +2,7 @@
 
 > ## ⚠️ ALPHA — DO NOT USE IN PRODUCTION
 >
-> Version: **`0.1.0.alpha.8`**. Tracks NodeDB **v0.3.0** (commit `25040fdf`, 2026-06-07). Requires `nodedb-ruby >= 0.1.0.alpha.5`.
+> Version: **`0.1.0.alpha.12`**. Tracks NodeDB **v0.3.0** (commit `8e84501a`, 2026-07-07). Requires `nodedb-ruby >= 0.1.0.alpha.9`.
 >
 > This adapter is **experimental and unaudited**. It has **never been used or
 > tested in any production environment**. The migration DSL, model concerns,
@@ -30,7 +30,7 @@ handling and SQL building.
 | ---- | ---- |
 | [`mkhairi/nodedb-ruby`](https://github.com/mkhairi/nodedb-ruby) | core — pgwire connection, type map, SQL builders |
 | [`mkhairi/activerecord-nodedb-adapter`](https://github.com/mkhairi/activerecord-nodedb-adapter) | **this gem** — Rails ActiveRecord adapter |
-| [`mkhairi/sequel-nodedb-adapter`](https://github.com/mkhairi/sequel-nodedb-adapter) | Sequel adapter (stub) |
+| [`mkhairi/sequel-nodedb-adapter`](https://github.com/mkhairi/sequel-nodedb-adapter) | Sequel adapter (experimental — Dataset CRUD + model plugins) |
 | [`mkhairi/nodedb-on-rails`](https://github.com/mkhairi/nodedb-on-rails) | Rails 8 sample app exercising every NodeDB engine |
 
 ## Status
@@ -41,10 +41,10 @@ handling and SQL building.
 | Migration DSL     | Working — `create_collection` (with `bitemporal:` flag on v0.3.0+), `create_vector_index`, `drop_collection` |
 | Model concerns    | Vector, Graph (with `graph_stats` on v0.3.0+), Timeseries, Spatial, KV, FTS |
 | Ops surface       | `show_stats` / `show_metrics` / `show_memory` / `show_roles` / `show_tenant` / `show_tenants` / `set_tenant` (v0.3.0+) |
-| Test suite        | 56 examples / 0 failures / 0 pending |
+| Test suite        | exercised against live NodeDB; passing except known pre-existing bitemporal/BUG-025 failures (see *Known issues*) |
 | Rails versions    | 7.1+, 8.x verified |
 | Ruby versions     | 3.2+ (developed on 4.0.1) |
-| NodeDB versions   | 0.1.x, 0.2.0, 0.2.1, **0.3.0** (latest retest 2026-06-07 — see *Known issues*) |
+| NodeDB versions   | 0.1.x, 0.2.0, 0.2.1, **0.3.0** (latest retest 2026-07-07 — see *Known issues*) |
 | Sample app        | [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails) (Rails 8.1, full CRUD demo across every NodeDB engine + ops dashboard + personalized PageRank + bitemporal AuditLog) |
 
 ## Installation
@@ -433,7 +433,7 @@ end
 - Ruby 3.2+
 - Rails 7.1+ (verified on 8.1.3)
 - NodeDB (pgwire on port 6432) — **latest upstream `main` recommended**
-  (verified against `8e84501a`, post-v0.3.0). Brings document restart
+  (verified against `8e84501a`, post-v0.3.0, 2026-07-07). Brings document restart
   durability, qualified-WHERE and GROUP-BY-alias evaluation (both
   adapter rewrites retired), graph collection scoping, multi-database
   catalog reads, native KV/vector parity, and unified engine-clause
