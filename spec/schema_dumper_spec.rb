@@ -44,6 +44,26 @@ RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
     expect(stream.string).not_to include("ar_advisory_locks")
   end
 
+  it "emits bitemporal: true for bitemporal collections (and not for plain ones)" do
+    bt = "bt_dump_#{SecureRandom.hex(4)}"
+    plain = "plain_dump_#{SecureRandom.hex(4)}"
+    conn.create_collection(bt, engine: :document_strict, bitemporal: true) do |t|
+      t.text :action
+    end
+    conn.create_collection(plain, engine: :document_strict) do |t|
+      t.text :action
+    end
+
+    stream = StringIO.new
+    conn.create_schema_dumper({}).dump(stream)
+
+    expect(stream.string).to match(/create_document_strict "#{bt}", bitemporal: true/)
+    expect(stream.string).to match(/create_document_strict "#{plain}" do/)
+  ensure
+    conn.drop_collection(bt, if_exists: true)
+    conn.drop_collection(plain, if_exists: true)
+  end
+
   it "dumps without raising and omits collections it cannot DESCRIBE" do
     listed = conn.execute("SHOW COLLECTIONS").to_a.map { |r| r["name"] }
     expect(listed).to include("spec_tenant_scratch") # precondition: daemon-wide listing

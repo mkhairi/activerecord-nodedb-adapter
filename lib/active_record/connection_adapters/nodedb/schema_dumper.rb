@@ -55,6 +55,7 @@ module ActiveRecord
 
           stream.print "  #{helper} #{name.inspect}"
           stream.print ", engine: :#{engine}" if helper == "create_collection" && engine
+          stream.print ", bitemporal: true" if bitemporal?(name)
           if user_columns.any?
             stream.puts " do |t|"
             user_columns.each do |field, type|
@@ -65,6 +66,17 @@ module ActiveRecord
             stream.puts
           end
           stream.puts
+        end
+
+        # DESCRIBE exposes no bitemporal marker on current upstream, so
+        # probe with the cheapest history read: it succeeds (0 rows) on a
+        # bitemporal collection and errors "requires a bitemporal
+        # collection" otherwise. Any error means "don't emit the flag".
+        def bitemporal?(name)
+          @connection.execute("SELECT 1 FROM #{name} FOR SYSTEM_TIME AS OF 1 LIMIT 1")
+          true
+        rescue ActiveRecord::StatementInvalid
+          false
         end
 
         def detect_engine(rows)
