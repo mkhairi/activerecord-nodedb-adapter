@@ -11,6 +11,10 @@ RSpec.describe "NodeDB-aware InternalMetadata (BUG-033 shapes)", :integration do
   let(:meta) { pool.internal_metadata }
   let(:key) { "spec_key_#{SecureRandom.hex(4)}" }
 
+  # The migrator normally creates ar_internal_metadata; on a fresh
+  # daemon/data directory nothing else has, so ensure it exists.
+  before { meta.create_table }
+
   after do
     ActiveRecord::Base.connection.execute(
     "DELETE FROM ar_internal_metadata WHERE id = '#{key}'"
