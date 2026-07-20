@@ -30,7 +30,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "activerecord", ">= 7.1"
-  spec.add_dependency "nodedb-ruby", ">= 0.1.0.alpha.9"
+  spec.add_dependency "nodedb-ruby", ">= 0.1.0.alpha.10"
   spec.add_dependency "ostruct", "~> 0.6"
 
   spec.add_development_dependency "rspec", "~> 3.13"
