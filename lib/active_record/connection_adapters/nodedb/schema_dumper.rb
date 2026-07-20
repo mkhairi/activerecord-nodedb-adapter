@@ -42,7 +42,7 @@ module ActiveRecord
           /\Amyapp_tmp_/, /\Anv_native_/, /\Aplain_dump_/,
           /\Asmoke_/, /\Atest_adapter_/, /\Atest_articles_/, /\Atest_ia_/,
           /\Atest_metrics_/, /\Atest_posts_/, /\Atest_social_/,
-          /\Avquery_bypass_/
+          /\Atest_tdef_/, /\Atxn_delete_/, /\Avquery_bypass_/
         ].freeze
 
         # Override Rails' `tables(stream)` step — emit our own DSL for each
