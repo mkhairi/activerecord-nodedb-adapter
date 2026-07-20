@@ -36,4 +36,17 @@ RSpec.describe "NodeDB-aware InternalMetadata (BUG-033 shapes)", :integration do
     meta[key] = "second"
     expect(meta[key]).to eq("second")
   end
+
+  # Schema.define's post-load step — the stock implementation writes the
+  # `key` column and crashes on our id-keyed collection.
+  it "create_table_and_set_flags writes id-keyed environment + schema_sha1" do
+    meta.create_table_and_set_flags("spec-env", "spec-sha1")
+
+    expect(meta[:environment]).to eq("spec-env")
+    expect(meta[:schema_sha1]).to eq("spec-sha1")
+  ensure
+    ActiveRecord::Base.connection.execute(
+      "DELETE FROM ar_internal_metadata WHERE id IN ('environment', 'schema_sha1')"
+    )
+  end
 end
