@@ -1,12 +1,10 @@
 require "spec_helper"
 require "securerandom"
 
-# BUG-033 regression: a bare PK point-lookup miss poisons that key's
-# `WHERE id =` reads for the rest of the session, and AR's migrator
-# does exactly miss -> insert -> re-read on ar_internal_metadata
-# ('environment'). The metadata accessors must therefore avoid bare
-# PK-equality reads (scan + client filter) and upsert insert-first.
-RSpec.describe "NodeDB-aware InternalMetadata (BUG-033 shapes)", :integration do
+# AR's migrator does miss -> insert -> re-read on ar_internal_metadata
+# ('environment') — a shape that historically hit an upstream
+# point-lookup cache bug (fixed upstream), so keep asserting it works.
+RSpec.describe "NodeDB-aware InternalMetadata (migrator shapes)", :integration do
   let(:pool) { ActiveRecord::Base.connection_pool }
   let(:meta) { pool.internal_metadata }
   let(:key) { "spec_key_#{SecureRandom.hex(4)}" }

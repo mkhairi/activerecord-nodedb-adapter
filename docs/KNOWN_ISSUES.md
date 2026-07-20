@@ -108,15 +108,6 @@ You write idiomatic AR; the adapter swallows the workaround:
   Document/KV/graph/bitemporal data survive restarts intact (BUG-036
   is fixed); treat timeseries data as restart-volatile — reseed after
   daemon restarts.
-- **BUG-033 — a PK point-lookup miss poisons that key for the rest of
-  the session** (`f8a4df44`, still present on `8e84501a`): after
-  `WHERE id = 'k'` returns nothing, a subsequent INSERT of `'k'`
-  succeeds but the same bare PK-equality read keeps returning 0 rows
-  (scans and compound predicates see the row; INSERT/UPDATE don't
-  invalidate the cached miss). Breaks same-connection
-  check-then-insert-then-read patterns like `find_or_create_by` +
-  reload. Avoid re-reading a just-created key by bare PK equality on
-  the same connection, or add any second predicate.
 - **BUG-035 — DROP USER leaves dangling catalog owner references that
   brick the next boot**: even with every owned collection dropped
   first, dropping a tenant user (and then its tenant) leaves an owner

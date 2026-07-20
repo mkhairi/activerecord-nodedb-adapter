@@ -176,16 +176,11 @@ module ActiveRecord
           true
         end
 
-        # Scan + client-side filter instead of `WHERE id = <key>`:
-        # BUG-033 — a point-lookup miss poisons that key's PK-equality
-        # reads for the rest of the session (INSERT/UPDATE don't
-        # invalidate), and the lock flow reads exactly such a key right
-        # before inserting it. The lock collection stays tiny, so the
-        # scan is cheap.
         def advisory_lock_row(key)
           execute(
-            "SELECT id, owner, acquired_at FROM #{ADVISORY_LOCKS_COLLECTION}"
-          ).find { |row| row["id"] == key }
+            "SELECT id, owner, acquired_at FROM #{ADVISORY_LOCKS_COLLECTION} " \
+            "WHERE id = #{quote(key)}"
+          ).first
         end
 
         def ensure_advisory_lock_collection
