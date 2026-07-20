@@ -57,7 +57,18 @@ module ActiveRecord
 
         TXN_RE = /\A\s*(BEGIN|START\s+TRANSACTION|COMMIT|END|ROLLBACK)/i
 
+        SSL_DEMANDING_MODES = %w[require verify-ca verify-full].freeze
+
         def self.connect(conn_params)
+          sslmode = conn_params[:sslmode].to_s
+          ssl_files = conn_params.values_at(:sslcert, :sslkey, :sslrootcert).compact
+          if SSL_DEMANDING_MODES.include?(sslmode) || ssl_files.any?
+            raise NodeDB::ConnectionError,
+              "transport: native does not support TLS; connection refused because " \
+              "sslmode=#{sslmode.empty? ? "(unset)" : sslmode} demands encryption. " \
+              "Use the pgwire transport for TLS, or remove the ssl* options."
+          end
+
           native = NodeDB::Native::Connection.connect(
             host: conn_params[:host] || "localhost",
             port: conn_params[:port] || NodeDB::Native::Connection::DEFAULT_PORT,

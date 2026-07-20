@@ -131,4 +131,51 @@ RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::NativePGCompat do
         .to raise_error(PG::Error, /nope/)
     end
   end
+
+  describe ".connect fail-closed TLS guard" do
+    before do
+      allow(NodeDB::Native::Connection).to receive(:connect)
+    end
+
+    it "refuses to connect when sslmode=require" do
+      params = {host: "localhost", sslmode: "require"}
+      expect { described_class.connect(params) }
+        .to raise_error(NodeDB::ConnectionError, /does not support TLS/)
+      expect(NodeDB::Native::Connection).not_to have_received(:connect)
+    end
+
+    it "refuses to connect when sslmode=verify-full" do
+      params = {host: "localhost", sslmode: "verify-full"}
+      expect { described_class.connect(params) }
+        .to raise_error(NodeDB::ConnectionError, /does not support TLS/)
+      expect(NodeDB::Native::Connection).not_to have_received(:connect)
+    end
+
+    it "refuses to connect when sslrootcert is set, even with no sslmode" do
+      params = {host: "localhost", sslrootcert: "/tmp/ca.pem"}
+      expect { described_class.connect(params) }
+        .to raise_error(NodeDB::ConnectionError, /does not support TLS/)
+      expect(NodeDB::Native::Connection).not_to have_received(:connect)
+    end
+
+    it "does not raise when sslmode=prefer" do
+      fake_conn = instance_double(NodeDB::Native::Connection)
+      allow(NodeDB::Native::Connection).to receive(:connect).and_return(fake_conn)
+      params = {host: "localhost", sslmode: "prefer"}
+      result = nil
+      expect { result = described_class.connect(params) }.not_to raise_error
+      expect(result).to be_a(described_class)
+      expect(NodeDB::Native::Connection).to have_received(:connect)
+    end
+
+    it "does not raise when no ssl options are present" do
+      fake_conn = instance_double(NodeDB::Native::Connection)
+      allow(NodeDB::Native::Connection).to receive(:connect).and_return(fake_conn)
+      params = {host: "localhost", port: 5433, dbname: "nodedb", user: "u", password: "p"}
+      result = nil
+      expect { result = described_class.connect(params) }.not_to raise_error
+      expect(result).to be_a(described_class)
+      expect(NodeDB::Native::Connection).to have_received(:connect)
+    end
+  end
 end
