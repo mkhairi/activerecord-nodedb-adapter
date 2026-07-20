@@ -11,7 +11,8 @@ module ActiveRecord
       # commands the adapter ships (create_document_strict, create_timeseries,
       # create_kv, etc).
       #
-      # Skips internal collections (`schema_migrations`, `ar_internal_metadata`).
+      # Skips internal collections (`schema_migrations`, `ar_internal_metadata`,
+      # `ar_advisory_locks`).
       class SchemaDumper < ::ActiveRecord::SchemaDumper
         # AR makes ::SchemaDumper.new private; expose it on the subclass so
         # the adapter's `create_schema_dumper` factory can instantiate us.
@@ -26,7 +27,9 @@ module ActiveRecord
           "spatial" => "create_spatial"
         }.freeze
 
-        INTERNAL_TABLES = %w[schema_migrations ar_internal_metadata].freeze
+        # ar_advisory_locks is created lazily by the migration advisory
+        # lock itself, so a dumped block always collides on db:schema:load.
+        INTERNAL_TABLES = %w[schema_migrations ar_internal_metadata ar_advisory_locks].freeze
 
         # Override Rails' `tables(stream)` step — emit our own DSL for each
         # NodeDB collection.

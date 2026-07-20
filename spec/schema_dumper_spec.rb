@@ -34,6 +34,16 @@ RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
     tenant_conn.close
   end
 
+  it "omits the internal ar_advisory_locks collection" do
+    conn.send(:ensure_advisory_lock_collection)
+    expect(conn.collections).to include("ar_advisory_locks") # precondition
+
+    stream = StringIO.new
+    conn.create_schema_dumper({}).dump(stream)
+
+    expect(stream.string).not_to include("ar_advisory_locks")
+  end
+
   it "dumps without raising and omits collections it cannot DESCRIBE" do
     listed = conn.execute("SHOW COLLECTIONS").to_a.map { |r| r["name"] }
     expect(listed).to include("spec_tenant_scratch") # precondition: daemon-wide listing
