@@ -9,16 +9,14 @@ comments). This list tracks the **latest upstream
 only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
-Last retested: **2026-07-20** against upstream `main` at `3eaa49873`
-(post-v0.4.0). This head fixed another wave of tracked bugs — the
-point-lookup miss-poisoning cache (BUG-033, workaround removed), the
-non-parseable `server_version` (BUG-043, workaround removed), the
-missing `pg_attrdef`/`pg_range` catalog tables (BUG-042), empty
-`current_schemas()` (BUG-044), and the earlier scalar-aggregate,
-filtered-history, TIMESTAMP-compare, timeseries-restart, and
-DESCRIBE-duplicate regressions (BUG-037…041). The same period
-surfaced five new tracked bugs (BUG-045…049 below), including a
-severe drop-retention catalog instability.
+Last retested: **2026-07-20** against upstream `main` at `eea86b279`
+(v0.4.0 final). This head fixed the DROP USER dangling-owner boot
+brick (BUG-035 — ownership is now reassigned and the startup check
+repairs already-affected data directories) and the session plan
+cache's stale-empty point lookups, and rejects duplicate
+`CREATE TENANT` names. Still open from the previous wave:
+BUG-045…049. New this round: BUG-050 — a two-statement graph repro
+for the permanent metadata wedge.
 
 ## Adapter compensates transparently
 
@@ -70,17 +68,20 @@ You write idiomatic AR; the adapter swallows the workaround:
   alias deterministically and work; hand-written SQL, consoles, and
   mixed clients sharing pooled connections hit it. Keep one labeling
   per session, or reconnect.
-- **BUG-047 — every `GRAPH INSERT EDGE` double-counts** (`3eaa49873`):
+- **BUG-047 — every `GRAPH INSERT EDGE` double-counts** (`eea86b279`):
   one insert registers 2 edges (and duplicate endpoint nodes) in
   `SHOW GRAPH STATS` and the per-label breakdown. No workaround —
   treat graph stats counters as unreliable; whether traversals also
-  see duplicate edges is unconfirmed.
-- **BUG-048 — native transport: transactional INSERTs are invisible to
-  PK point lookups** (`3eaa49873`, native `:6433` only): a row
-  committed inside `BEGIN…COMMIT` is durably stored (scans see it,
-  survives reconnect) but `WHERE id = <pk>` returns 0 rows. AR wraps
-  every `create!` in a transaction, so `find` breaks. pgwire is
-  unaffected — keep `transport: native` off write paths (it remains
+  see duplicate edges is unconfirmed. See also BUG-050: the same
+  doubled descriptor state appears to wedge the daemon on restart.
+- **BUG-048 — native transport: committed INSERTs are invisible to PK
+  point lookups and filtered aggregates** (`eea86b279`, native `:6433`
+  only): a row committed inside `BEGIN…COMMIT` is durably stored
+  (scans see it, survives reconnect) but `WHERE id = <pk>` returns 0
+  rows, and a filtered `COUNT(*)` in the same session also misses it.
+  AR wraps every `create!` in a transaction, so `find` breaks. pgwire
+  is unaffected (v0.4.0's plan-cache fix resolved the analogous pgwire
+  staleness) — keep `transport: native` off write paths (it remains
   secondary/on-hold pending the official SDK).
 - **`SEARCH` cannot be wrapped in subqueries** (`IN (SEARCH ...)`,
   `FROM (SEARCH ...)` fail to parse). The `Vector` concern returns
@@ -90,6 +91,16 @@ You write idiomatic AR; the adapter swallows the workaround:
 
 ## Open, no workaround
 
+- **BUG-050 — `GRAPH INSERT EDGE` + daemon restart permanently wedges
+  the metadata plane** (CRITICAL, `eea86b279`): a single edge insert
+  leaves the collection's descriptor version inconsistent with the
+  replicated metadata log; on the next restart the metadata applier
+  hits a "descriptor version anomaly" for the graph-touched collection
+  and retries forever. All DDL then times out daemon-wide, filtered
+  `count(*)` hangs, DML on existing collections keeps working; only a
+  data-directory rebuild recovers. 100% reproducible. Any app that
+  touches the graph engine bricks its DDL plane at the next restart —
+  avoid graph writes on data directories you intend to keep.
 - **BUG-049 — drop-retention catalog instability escalating to a
   daemon-wide metadata wedge** (CRITICAL, `3eaa49873`): dropped
   collections resurrect; a collection recreated under a dropped name
@@ -103,12 +114,6 @@ You write idiomatic AR; the adapter swallows the workaround:
   rebuild recovers. Avoid DROP + CREATE of the same collection name
   on daemons you care about; verify recreated definitions again after
   several minutes.
-- **BUG-035 — DROP USER leaves dangling catalog owner references that
-  brick the next boot**: even with every owned collection dropped
-  first, dropping a tenant user (and then its tenant) leaves an owner
-  reference the boot integrity check refuses to repair — the data
-  directory is unbootable without a wipe. Treat tenant users as
-  provision-only.
 - **Spatial read-side accessors** — `ST_AsText` / `ST_X` / `ST_Y`
   return empty and `ST_DWithin` rejects constructor arguments, so
   spatial predicates remain unusable (write path works; raw GeoJSON
