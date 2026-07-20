@@ -174,6 +174,21 @@ RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::NativePGCompat do
     end
   end
 
+  describe "#reset" do
+    it "reconnects using the native connection's parameters" do
+      params = {host: "localhost", port: 6433, database: "nodedb",
+                username: "nodedb", password: "pw", connect_timeout: nil}
+      old_native = instance_double(NodeDB::Native::Connection,
+        connection_parameters: params, close: nil)
+      fresh_native = instance_double(NodeDB::Native::Connection)
+      allow(NodeDB::Native::Connection).to receive(:connect).with(**params).and_return(fresh_native)
+
+      compat = described_class.new(old_native)
+      expect(compat.reset).to be(compat)
+      expect(NodeDB::Native::Connection).to have_received(:connect).with(**params)
+    end
+  end
+
   describe ".connect fail-closed TLS guard" do
     before do
       allow(NodeDB::Native::Connection).to receive(:connect)

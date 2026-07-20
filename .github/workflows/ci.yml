@@ -22,7 +22,7 @@ jobs:
       # Pinned to the release the gemspec/lockfile targets — bump this
       # tag when the nodedb-ruby dependency floor moves.
       - name: Check out nodedb-ruby alongside
-        run: git clone --depth 1 --branch v0.1.0.alpha.9 https://github.com/mkhairi/nodedb-ruby ../nodedb-ruby
+        run: git clone --depth 1 --branch v0.1.0.alpha.10 https://github.com/mkhairi/nodedb-ruby ../nodedb-ruby
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
