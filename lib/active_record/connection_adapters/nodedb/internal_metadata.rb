@@ -35,12 +35,21 @@ module ActiveRecord
           end
         end
 
+        # Schema.define's post-load step calls this on the pool's
+        # internal_metadata; the stock version routes through the private
+        # `update_or_create_entry`, whose SQL names the stock `key`
+        # column and crashes on our id-keyed collection ("unknown field
+        # 'key' not present in strict schema"). Route through our []=.
+        def create_table_and_set_flags(environment, schema_sha1 = nil)
+          return unless enabled?
+
+          create_table
+          self[:environment] = environment
+          self[:schema_sha1] = schema_sha1 if schema_sha1
+        end
+
         # Insert-first upsert: the PK uniqueness constraint is the
-        # existence check. A read-then-branch would both race and prime
-        # BUG-033's poisoned negative cache (a `WHERE id =` miss makes
-        # that key's point-lookups return empty for the rest of the
-        # session — exactly AR's miss -> insert -> re-read migrator
-        # flow on 'environment').
+        # existence check, so there is no read-then-branch race window.
         DUPLICATE_KEY_RE = /primary-key uniqueness|duplicate key/i
 
         def []=(key, value)
@@ -69,15 +78,14 @@ module ActiveRecord
           end
         end
 
-        # Scan + client-side filter instead of `WHERE id = <key>`: the
-        # bare PK-equality shape is BUG-033's poisoned read, and this
-        # collection holds a handful of rows at most.
         def [](key)
           return unless enabled?
 
           @pool.with_connection do |connection|
-            row = connection.execute("SELECT id, value FROM #{table_name}")
-              .find { |r| r["id"] == key.to_s }
+            row = connection.execute(
+              "SELECT id, value FROM #{table_name} " \
+              "WHERE id = #{connection.quote(key.to_s)}"
+            ).first
             row && row["value"]
           end
         end

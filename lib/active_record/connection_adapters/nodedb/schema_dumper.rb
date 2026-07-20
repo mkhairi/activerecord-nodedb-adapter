@@ -11,7 +11,8 @@ module ActiveRecord
       # commands the adapter ships (create_document_strict, create_timeseries,
       # create_kv, etc).
       #
-      # Skips internal collections (`schema_migrations`, `ar_internal_metadata`).
+      # Skips internal collections (`schema_migrations`, `ar_internal_metadata`,
+      # `ar_advisory_locks`).
       class SchemaDumper < ::ActiveRecord::SchemaDumper
         # AR makes ::SchemaDumper.new private; expose it on the subclass so
         # the adapter's `create_schema_dumper` factory can instantiate us.
@@ -26,13 +27,33 @@ module ActiveRecord
           "spatial" => "create_spatial"
         }.freeze
 
-        INTERNAL_TABLES = %w[schema_migrations ar_internal_metadata].freeze
+        # ar_advisory_locks is created lazily by the migration advisory
+        # lock itself, so a dumped block always collides on db:schema:load.
+        INTERNAL_TABLES = %w[schema_migrations ar_internal_metadata ar_advisory_locks].freeze
+
+        # Dev/test/spec runs share the single default nodedb database
+        # (CREATE DATABASE is unusable upstream), so collections leaked by
+        # an interrupted suite run would get baked into schema.rb. Ignore
+        # this stack's spec/smoke prefixes by default; apps add their own
+        # via ActiveRecord::SchemaDumper.ignore_tables (strings or
+        # regexps, honored below like the stock dumper).
+        SPEC_LEAK_PATTERNS = [
+          /\Abt_spec_/, /\Abt_dump_/, /\Acols_spec_/, /\Adequal_/,
+          /\Amyapp_tmp_/, /\Anv_native_/, /\Aplain_dump_/,
+          /\Asmoke_/, /\Atest_adapter_/, /\Atest_articles_/, /\Atest_ia_/,
+          /\Atest_metrics_/, /\Atest_posts_/, /\Atest_social_/,
+          /\Atest_tdef_/, /\Atxn_delete_/, /\Avquery_bypass_/
+        ].freeze
 
         # Override Rails' `tables(stream)` step — emit our own DSL for each
         # NodeDB collection.
         def tables(stream)
           collections = @connection.collections.sort - INTERNAL_TABLES
-          collections.each { |name| dump_collection(name, stream) }
+          collections.each do |name|
+            next if ignored?(name) || SPEC_LEAK_PATTERNS.any? { |p| p.match?(name) }
+
+            dump_collection(name, stream)
+          end
         end
 
         private
@@ -52,6 +73,7 @@ module ActiveRecord
 
           stream.print "  #{helper} #{name.inspect}"
           stream.print ", engine: :#{engine}" if helper == "create_collection" && engine
+          stream.print ", bitemporal: true" if bitemporal?(name)
           if user_columns.any?
             stream.puts " do |t|"
             user_columns.each do |field, type|
@@ -64,6 +86,17 @@ module ActiveRecord
           stream.puts
         end
 
+        # DESCRIBE exposes no bitemporal marker on current upstream, so
+        # probe with the cheapest history read: it succeeds (0 rows) on a
+        # bitemporal collection and errors "requires a bitemporal
+        # collection" otherwise. Any error means "don't emit the flag".
+        def bitemporal?(name)
+          @connection.execute("SELECT 1 FROM #{name} FOR SYSTEM_TIME AS OF 1 LIMIT 1")
+          true
+        rescue ActiveRecord::StatementInvalid
+          false
+        end
+
         def detect_engine(rows)
           storage = rows.find { |r| r["field"] == "__storage" }
           storage&.fetch("type")
@@ -71,19 +104,26 @@ module ActiveRecord
 
         def extract_user_columns(rows)
           # Drop:
-          #  - the first synthetic `id TEXT (false)` row (NodeDB internal)
+          #  - the synthetic `id TEXT (false)` row (NodeDB internal — DESCRIBE
+          #    types it plain TEXT; a reloaded collection must NOT redeclare it,
+          #    and the synthetic id rejects inserts anyway)
           #  - any `__*` markers (__storage, __collection_type, __kv_key)
           #
-          # Keep the explicit `id ... PRIMARY KEY` row when present.
+          # Keep the explicit `id ... PRIMARY KEY` row (typed "TEXT PRIMARY
+          # KEY" by DESCRIBE): dropping it dumps a collection whose reload
+          # gets only the synthetic id, and every INSERT naming `id` then
+          # fails with "unknown field 'id' not present in strict schema".
           seen_internal_id = false
           rows.filter_map do |row|
             field = row["field"].to_s
+            type = row["type"].to_s
             next if field.start_with?("__")
-            if field == "id" && !seen_internal_id && row["nullable"] == "false"
+            if field == "id" && !seen_internal_id && row["nullable"] == "false" &&
+                !type.include?("PRIMARY KEY")
               seen_internal_id = true
               next
             end
-            [field, row["type"].to_s]
+            [field, type]
           end
         end
       end

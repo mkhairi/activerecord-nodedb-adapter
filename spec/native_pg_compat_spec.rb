@@ -102,6 +102,48 @@ RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::NativePGCompat do
     end
   end
 
+  describe "transaction tracking" do
+    it "goes intrans on BEGIN" do
+      conn.async_exec("BEGIN")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_INTRANS)
+    end
+
+    it "stays intrans after SAVEPOINT" do
+      conn.async_exec("BEGIN")
+      conn.async_exec("SAVEPOINT active_record_1")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_INTRANS)
+    end
+
+    it "stays intrans after ROLLBACK TO SAVEPOINT (the bug this plan fixes)" do
+      conn.async_exec("BEGIN")
+      conn.async_exec("ROLLBACK TO SAVEPOINT active_record_1")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_INTRANS)
+    end
+
+    it "stays intrans after RELEASE SAVEPOINT" do
+      conn.async_exec("BEGIN")
+      conn.async_exec("RELEASE SAVEPOINT active_record_1")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_INTRANS)
+    end
+
+    it "goes idle on COMMIT" do
+      conn.async_exec("BEGIN")
+      conn.async_exec("COMMIT")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_IDLE)
+    end
+
+    it "goes idle on bare ROLLBACK" do
+      conn.async_exec("BEGIN")
+      conn.async_exec("ROLLBACK")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_IDLE)
+    end
+
+    it "goes intrans on lowercase 'start transaction'" do
+      conn.async_exec("start transaction")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_INTRANS)
+    end
+  end
+
   describe "connection lifecycle surface" do
     it "reports OK status, server_version, finished?, and closes" do
       expect(conn.status).to eq(PG::CONNECTION_OK)
@@ -144,6 +186,53 @@ RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::NativePGCompat do
       compat = described_class.new(old_native)
       expect(compat.reset).to be(compat)
       expect(NodeDB::Native::Connection).to have_received(:connect).with(**params)
+    end
+  end
+
+  describe ".connect fail-closed TLS guard" do
+    before do
+      allow(NodeDB::Native::Connection).to receive(:connect)
+    end
+
+    it "refuses to connect when sslmode=require" do
+      params = {host: "localhost", sslmode: "require"}
+      expect { described_class.connect(params) }
+        .to raise_error(NodeDB::ConnectionError, /does not support TLS/)
+      expect(NodeDB::Native::Connection).not_to have_received(:connect)
+    end
+
+    it "refuses to connect when sslmode=verify-full" do
+      params = {host: "localhost", sslmode: "verify-full"}
+      expect { described_class.connect(params) }
+        .to raise_error(NodeDB::ConnectionError, /does not support TLS/)
+      expect(NodeDB::Native::Connection).not_to have_received(:connect)
+    end
+
+    it "refuses to connect when sslrootcert is set, even with no sslmode" do
+      params = {host: "localhost", sslrootcert: "/tmp/ca.pem"}
+      expect { described_class.connect(params) }
+        .to raise_error(NodeDB::ConnectionError, /does not support TLS/)
+      expect(NodeDB::Native::Connection).not_to have_received(:connect)
+    end
+
+    it "does not raise when sslmode=prefer" do
+      fake_conn = instance_double(NodeDB::Native::Connection)
+      allow(NodeDB::Native::Connection).to receive(:connect).and_return(fake_conn)
+      params = {host: "localhost", sslmode: "prefer"}
+      result = nil
+      expect { result = described_class.connect(params) }.not_to raise_error
+      expect(result).to be_a(described_class)
+      expect(NodeDB::Native::Connection).to have_received(:connect)
+    end
+
+    it "does not raise when no ssl options are present" do
+      fake_conn = instance_double(NodeDB::Native::Connection)
+      allow(NodeDB::Native::Connection).to receive(:connect).and_return(fake_conn)
+      params = {host: "localhost", port: 5433, dbname: "nodedb", user: "u", password: "p"}
+      result = nil
+      expect { result = described_class.connect(params) }.not_to raise_error
+      expect(result).to be_a(described_class)
+      expect(NodeDB::Native::Connection).to have_received(:connect)
     end
   end
 end

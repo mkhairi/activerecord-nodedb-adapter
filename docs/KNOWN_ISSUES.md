@@ -9,35 +9,26 @@ comments). This list tracks the **latest upstream
 only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
-Last retested: **2026-07-07** against upstream `main` at `8e84501a`
-(post-v0.3.0). A large fix wave resolved eight tracked bugs — graph
-collection scoping (BUG-023), engine-spelling divergence (BUG-027),
-bitemporal history resurrection (BUG-028), count-after-DELETE drift
-(BUG-029), the bitemporal versioned-store freeze (BUG-031),
-multi-database catalog reads (BUG-032), auth-churn flaps (BUG-034), and
-the critical document restart-durability loss (BUG-036) — and the
-qualified-WHERE (BUG-025) and GROUP-BY-alias (BUG-030) evaluator
-defects, whose adapter workarounds are now removed. The same head
-regressed scalar aggregates, filtered history reads, TIMESTAMP
-upper-bound compares, timeseries restart replay, and DESCRIBE output
-(BUG-037…041 below).
+Last retested: **2026-07-20** against upstream `main` at `eea86b279`
+(v0.4.0 final). This head fixed the DROP USER dangling-owner boot
+brick (BUG-035 — ownership is now reassigned and the startup check
+repairs already-affected data directories) and the session plan
+cache's stale-empty point lookups, and rejects duplicate
+`CREATE TENANT` names. Still open from the previous wave:
+BUG-045…049. New this round: BUG-050 — a two-statement graph repro
+for the permanent metadata wedge.
 
 ## Adapter compensates transparently
 
 You write idiomatic AR; the adapter swallows the workaround:
 
-- **BUG-003 — `PQserverVersion()` raises.** libpq can't parse the
-  `server_version` ParameterStatus (`NodeDB 0.3.0`). The adapter asks
-  the server via `current_setting('server_version_num')` (fallback
-  constant for older builds) and no-ops `check_version`.
-- **BUG-007 / BUG-019 — pg_catalog introspection gaps.**
-  `current_schemas()` returns an empty cell and the `pg_range` /
-  `pg_attrdef` vtables are missing, so AR's `tables`,
-  `column_definitions`, and `load_additional_types` queries can't run
-  as written (regclass casts, cross-vtable joins, and `typelem` DO
-  evaluate now). The adapter routes schema reflection through
-  NodeDB-native paths (SHOW COLLECTIONS / DESCRIBE) and no-ops
-  `load_additional_types`.
+- **BUG-046 — regclass casts don't strip quoted identifiers.**
+  `'"name"'::regclass` (the form Rails emits) silently resolves to
+  NULL, so AR's stock reflection queries would see zero columns even
+  though the catalog tables now exist. The adapter routes schema
+  reflection through NodeDB-native paths (SHOW COLLECTIONS /
+  DESCRIBE) and no-ops `load_additional_types`, so apps are
+  unaffected.
 - **BUG-014 — advisory locks missing** (upstream closed won't-fix on
   the pgwire surface, 2026-07-04). The adapter implements the
   migration mutex application-level: an `ar_advisory_locks`
@@ -57,8 +48,10 @@ You write idiomatic AR; the adapter swallows the workaround:
   Graph concern passes bare collection names for edge inserts and
   algo calls.
 - **`schema_migrations` / `ar_internal_metadata`** — NodeDB-aware
-  subclasses use `CREATE COLLECTION` + raw unqualified SQL; `rails
-  db:migrate` works normally.
+  subclasses use `CREATE COLLECTION` + raw unqualified SQL (the
+  metadata collection is keyed on NodeDB's mandatory `id` column);
+  `rails db:migrate`, `db:schema:load`, and `db:prepare` work
+  normally.
 - **GRAPH TRAVERSE / INSERT EDGE quirks** — JSON-array row parsed and
   `IN 'collection'` threaded automatically by the `Graph` concern;
   harmless libpq stderr noise filtered by `Graph.silence_libpq_noise`.
@@ -67,70 +60,73 @@ You write idiomatic AR; the adapter swallows the workaround:
 
 ## Requires user awareness
 
+- **BUG-045 — grouped-aggregate result cache is poisoned by select-list
+  labeling** (`3eaa49873`): the first grouped-aggregate query on a
+  collection in a session pins its labeling; running the same
+  aggregate with different aliasing (aliased vs unaliased, either
+  order) returns empty aggregate cells. AR's own grouped calculations
+  alias deterministically and work; hand-written SQL, consoles, and
+  mixed clients sharing pooled connections hit it. Keep one labeling
+  per session, or reconnect.
+- **BUG-047 — every `GRAPH INSERT EDGE` double-counts** (`eea86b279`):
+  one insert registers 2 edges (and duplicate endpoint nodes) in
+  `SHOW GRAPH STATS` and the per-label breakdown. No workaround —
+  treat graph stats counters as unreliable; whether traversals also
+  see duplicate edges is unconfirmed. See also BUG-050: the same
+  doubled descriptor state appears to wedge the daemon on restart.
+- **BUG-048 — native transport: committed INSERTs are invisible to PK
+  point lookups and filtered aggregates** (`eea86b279`, native `:6433`
+  only): a row committed inside `BEGIN…COMMIT` is durably stored
+  (scans see it, survives reconnect) but `WHERE id = <pk>` returns 0
+  rows, and a filtered `COUNT(*)` in the same session also misses it.
+  AR wraps every `create!` in a transaction, so `find` breaks. pgwire
+  is unaffected (v0.4.0's plan-cache fix resolved the analogous pgwire
+  staleness) — keep `transport: native` off write paths (it remains
+  secondary/on-hold pending the official SDK).
 - **`SEARCH` cannot be wrapped in subqueries** (`IN (SEARCH ...)`,
   `FROM (SEARCH ...)` fail to parse). The `Vector` concern returns
   id + surrogate + distance; note the `id` column is only the document
   id on vector-engine collections (a result ordinal elsewhere), so do
   a follow-up `find` where you need the record.
-- **BUG-041 — DESCRIBE lists the PK column twice** (`id TEXT` +
-  `id TEXT PRIMARY KEY`, contradictory nullability) plus a `__storage`
-  metadata row. Mostly masked because ActiveRecord keys columns by
-  name and the schema dumper emits one entry, but code that iterates
-  `connection.columns` sees the duplicate.
-- **Unaliased aggregates in hand-written GROUP BY SQL return empty
-  cells** (BUG-030's remaining case) — alias them
-  (`SUM(x) AS sum_x`). AR's own grouped calculations always alias and
-  work unmodified now.
-- **`transport: native` is at result-shape parity with pgwire** since
-  BUG-018 was fixed upstream, but pgwire remains the primary,
-  default transport — the hand-rolled native client will be replaced
-  by NodeDB's official SDK once one ships.
 
 ## Open, no workaround
 
-- **BUG-037 — scalar aggregates return per-shard partial rows**
-  (CRITICAL, `8e84501a`): `count(*)` / `SUM(...)` without GROUP BY
-  return 11 rows (ten identity rows + the real value at a
-  shard-dependent position), and an aliased scalar aggregate returns
-  all-empty rows. `Model.count` / `.sum` therefore read `0`/`nil` most
-  of the time, silently — pagination totals, `exists?`-style guards,
-  and count assertions are all unreliable. Assert cardinality via
-  scans (`Model.pluck(:id).size`) until fixed. Grouped calculations
-  are unaffected.
-- **BUG-038 — `AS OF SYSTEM TIME NULL` + `WHERE` returns zero rows**
-  (`8e84501a`): the bare history scan works, so
-  `Bitemporal.versions` is fine, but the per-record surface —
-  `Bitemporal.history(pk)` and `.as_of(time)` with conditions —
-  returns empty.
-- **BUG-039 — TIMESTAMP upper-bound compares match zero rows**
-  (`8e84501a`): `t <= ?`, `t < ?`, and `BETWEEN` on TIMESTAMP columns
-  silently match nothing (`>=` / `>` work; INTEGER compares fine).
-  Every date-window / expiry query shape is affected.
-- **BUG-040 — timeseries collections lose AND duplicate points across
-  daemon restarts** (`8e84501a`): the first restart after writes drops
-  the newest point(s) and/or double-applies surviving ones on replay.
-  Document/KV/graph/bitemporal data survive restarts intact (BUG-036
-  is fixed); treat timeseries data as restart-volatile — reseed after
-  daemon restarts.
-- **BUG-033 — a PK point-lookup miss poisons that key for the rest of
-  the session** (`f8a4df44`, still present on `8e84501a`): after
-  `WHERE id = 'k'` returns nothing, a subsequent INSERT of `'k'`
-  succeeds but the same bare PK-equality read keeps returning 0 rows
-  (scans and compound predicates see the row; INSERT/UPDATE don't
-  invalidate the cached miss). Breaks same-connection
-  check-then-insert-then-read patterns like `find_or_create_by` +
-  reload. Avoid re-reading a just-created key by bare PK equality on
-  the same connection, or add any second predicate.
-- **BUG-035 — DROP USER leaves dangling catalog owner references that
-  brick the next boot**: even with every owned collection dropped
-  first, dropping a tenant user (and then its tenant) leaves an owner
-  reference the boot integrity check refuses to repair — the data
-  directory is unbootable without a wipe. Treat tenant users as
-  provision-only.
+- **BUG-050 — `GRAPH INSERT EDGE` + daemon restart permanently wedges
+  the metadata plane** (CRITICAL, `eea86b279`): a single edge insert
+  leaves the collection's descriptor version inconsistent with the
+  replicated metadata log; on the next restart the metadata applier
+  hits a "descriptor version anomaly" for the graph-touched collection
+  and retries forever. All DDL then times out daemon-wide, filtered
+  `count(*)` hangs, DML on existing collections keeps working; only a
+  data-directory rebuild recovers. 100% reproducible. Any app that
+  touches the graph engine bricks its DDL plane at the next restart —
+  avoid graph writes on data directories you intend to keep.
+- **BUG-049 — drop-retention catalog instability escalating to a
+  daemon-wide metadata wedge** (CRITICAL, `3eaa49873`): dropped
+  collections resurrect; a collection recreated under a dropped name
+  can flip back to "dropped, within retention window" minutes later
+  (restore with `UNDROP COLLECTION`, then expect a ~30–60s
+  "retryable schema change" settle); and the churn can corrupt the
+  descriptor version chain, after which the metadata applier stalls
+  permanently — every DDL statement times out
+  (`metadata propose timed out … (current: N)`) daemon-wide, DML on
+  existing collections keeps working, and only a data-directory
+  rebuild recovers. Avoid DROP + CREATE of the same collection name
+  on daemons you care about; verify recreated definitions again after
+  several minutes.
+- **BUG-051 — DROP TENANT deadlocks once the built-in tenant admin
+  inherits ownership** (`eea86b279`): `DROP USER` reassigns owned
+  objects (including drop-retention tombstones) to `<tenant>_admin`;
+  `DROP TENANT` then refuses to drop that admin ("no active
+  administrative principal available for ownership reassignment"),
+  and the second-admin route is circular ("users still belong to
+  it"). Any tenant in which a user ever owned a collection is
+  permanently undroppable. Treat tenants as provision-only.
 - **Spatial read-side accessors** — `ST_AsText` / `ST_X` / `ST_Y`
   return empty and `ST_DWithin` rejects constructor arguments, so
   spatial predicates remain unusable (write path works; raw GeoJSON
-  column reads work).
+  column reads work). Last verified on `8e84501a`; not retested on
+  `3eaa49873`.
 - **`ROLLBACK AND CHAIN` unsupported** — surfaces when AR retries a
   failed nested transaction. A translation shim (`ROLLBACK; BEGIN`) is
-  a possible future adapter addition.
+  a possible future adapter addition. Last verified on `8e84501a`.
