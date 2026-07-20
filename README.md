@@ -2,7 +2,7 @@
 
 > ## ⚠️ ALPHA — DO NOT USE IN PRODUCTION
 >
-> Version: **`0.1.0.alpha.12`**. Tracks NodeDB **v0.3.0** (commit `8e84501a`, 2026-07-07). Requires `nodedb-ruby >= 0.1.0.alpha.9`.
+> Version: **`0.1.0.alpha.12`**. Tracks NodeDB **v0.4.0** (upstream `main` at `3eaa49873`, 2026-07-20). Requires `nodedb-ruby >= 0.1.0.alpha.9`.
 >
 > This adapter is **experimental and unaudited**. It has **never been used or
 > tested in any production environment**. The migration DSL, model concerns,
@@ -41,10 +41,10 @@ handling and SQL building.
 | Migration DSL     | Working — `create_collection` (with `bitemporal:` flag on v0.3.0+), `create_vector_index`, `drop_collection` |
 | Model concerns    | Vector, Graph (with `graph_stats` on v0.3.0+), Timeseries, Spatial, KV, FTS |
 | Ops surface       | `show_stats` / `show_metrics` / `show_memory` / `show_roles` / `show_tenant` / `show_tenants` / `set_tenant` (v0.3.0+) |
-| Test suite        | exercised against live NodeDB; passing except known pre-existing bitemporal/BUG-025 failures (see *Known issues*) |
+| Test suite        | 127 examples against live NodeDB; failures limited to known upstream regressions (see *Known issues*) |
 | Rails versions    | 7.1+, 8.x verified |
 | Ruby versions     | 3.2+ (developed on 4.0.1) |
-| NodeDB versions   | 0.1.x, 0.2.0, 0.2.1, **0.3.0** (latest retest 2026-07-07 — see *Known issues*) |
+| NodeDB versions   | 0.1.x through **0.4.0** (latest retest 2026-07-20 against `main` — see *Known issues*) |
 | Sample app        | [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails) (Rails 8.1, full CRUD demo across every NodeDB engine + ops dashboard + personalized PageRank + bitemporal AuditLog) |
 
 ## Installation
@@ -231,16 +231,16 @@ Time-travel rows come back as `Array<Hash>` — the `AS OF SYSTEM TIME`
 scan suffix doesn't compose with AR relations, and history rows carry
 the extra `_ts_system` column.
 
-One upstream sharp edge remains: don't DROP + CREATE a bitemporal
-collection under the same name (the old version history resurrects,
-BUG-028). Details in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md).
+One upstream sharp edge remains: avoid DROP + CREATE of any collection
+under the same name — current upstream's drop-retention machinery can
+flip the recreated collection back to dropped state minutes later.
+Details in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md).
 
 ## Idiomatic querying
 
 Hash-conditions, conditional counts, and qualified projections work
-as-is — the adapter rewrites AR's table-qualified SQL on single-table
-statements before dispatch (NodeDB silently matches zero rows for
-qualified refs otherwise; see BUG-025 in the known issues):
+as-is on current upstream (the adapter's old qualified-SQL rewrite was
+retired after the upstream fix):
 
 ```ruby
 Article.where(title: "hello")             # works
@@ -261,7 +261,7 @@ conn.show_metrics   # extended Prometheus-style counters
 conn.show_memory    # per-engine memory budget snapshot
 conn.show_roles     # defined roles
 conn.show_tenant(0) # current tenant snapshot
-conn.nodedb_version # => "0.3.0" (parsed from SHOW server_version)
+conn.nodedb_version # => "0.4.0" (parsed from SHOW server_version)
 ```
 
 ## Migrations
@@ -422,9 +422,6 @@ Implementation notes:
 - Lookup keys (versions, metadata keys) live in NodeDB's built-in `id`
   column. (Historical: non-`id` PKs used to collide upstream; fixed on
   current builds, the convention stays because it's harmless.)
-- DELETE path uses the BUG-008 workaround (re-issue outside the AR
-  transaction) so `db:rollback` never sees the stale point-lookup
-  phantom.
 
 ## Per-call session settings
 
@@ -444,13 +441,15 @@ end
 - Ruby 3.2+
 - Rails 7.1+ (verified on 8.1.3)
 - NodeDB (pgwire on port 6432) — **latest upstream `main` recommended**
-  (verified against `8e84501a`, post-v0.3.0, 2026-07-07). Brings document restart
-  durability, qualified-WHERE and GROUP-BY-alias evaluation (both
-  adapter rewrites retired), graph collection scoping, multi-database
-  catalog reads, native KV/vector parity, and unified engine-clause
-  spellings. Adapter still bypasses AR's pg_catalog introspection
-  (see the BUG-019 tracking issue), and this head carries fresh
-  regressions around scalar aggregates and filtered history reads —
+  (verified against `3eaa49873`, post-v0.4.0, 2026-07-20). Brings a
+  libpq-parseable `server_version` (AR's stock version plumbing works),
+  the `pg_attrdef`/`pg_range` catalog tables and `current_schemas()`,
+  fixed point-lookup caching, and fixes for the earlier
+  scalar-aggregate, filtered-history, and TIMESTAMP-compare
+  regressions. The adapter still bypasses AR's stock pg_catalog
+  introspection (quoted-identifier regclass casts resolve to NULL
+  upstream), and this head carries fresh sharp edges around graph
+  edge counters and same-name collection recreation —
   see `docs/KNOWN_ISSUES.md`.
   - On-disk format changed vs pre-June builds — old data dirs make
     the daemon panic at boot; start with a fresh data directory.
@@ -466,8 +465,8 @@ end
 - [x] Connection adapter that registers under `adapter: nodedb`
 - [x] Simple-query mode (NodeDB does not implement extended-query
       `RowDescription` for prepared statements)
-- [x] `database_version` derived from `current_setting('server_version_num')`
-      (fallback `160000` for older builds) so AR's PG version guards pass
+- [x] `database_version` via libpq's stock `PQserverVersion()` path — AR's
+      PG version guards pass unmodified
 - [x] `nodedb_version` introspection from `SHOW server_version`
 - [x] Migration DSL: `create_collection`, `create_vector_index`,
       `drop_collection(if_exists:)`, `drop_vector_index`
@@ -481,20 +480,20 @@ end
       `ar_internal_metadata` collections
 - [x] Advisory-lock stubs (`get_advisory_lock` / `release_advisory_lock`) so
       AR's concurrent-migration guard doesn't trip — pair returns `true`
-- [x] `Nodedb::SchemaDumper` emits engine-aware DDL into `db/schema.rb`
+- [x] `Nodedb::SchemaDumper` emits engine-aware DDL into `db/schema.rb` —
+      keeps explicit PRIMARY KEY columns and the `bitemporal: true` flag,
+      skips internal collections, honors `ActiveRecord::SchemaDumper.ignore_tables`
 - [x] Type casters: `attribute :col, :vector` / `:json` / `:geometry`
 - [x] Quoting hooks: `Array<Numeric>` → VECTOR literal, `Hash` → JSON literal
 - [x] `connection.with_settings { … }` block for scoped session vars
 - [x] Model concerns: `NodeDB::Vector`, `Graph`, `Timeseries`, `Spatial`, `KV`,
       `FullTextSearch`
 - [x] `record.destroy` persists transactionally with no adapter override
-      (the BUG-008 re-issue workaround was retired after the upstream
-      transactional DELETE/PUT rework)
 - [x] `Graph.silence_libpq_noise` filter for harmless libpq stderr warnings
 - [x] `create_fts(name, fulltext: [...])` — document_strict collection + `CREATE FULLTEXT INDEX` (NodeDB removed the `fts` engine)
 - [x] `drop_collection` rescues missing-collection errors when `if_exists: true`
-- [x] `create_collection ..., bitemporal: true` — NodeDB `BITEMPORAL` collection modifier; AR models read and write bitemporal collections (upstream BUG-024 fixed). Caveat on current upstream: filtered history reads (`AS OF ... WHERE`) return empty — BUG-038
-- [x] `Model.graph_stats(verbose:, as_of:)` + `connection.graph_stats(collection:, verbose:, as_of:)` — `SHOW GRAPH STATS`, scoped form (upstream scoping fixed; Ruby fallback retired)
+- [x] `create_collection ..., bitemporal: true` — NodeDB `BITEMPORAL` collection modifier; AR models read and write bitemporal collections, and the schema dumper round-trips the flag
+- [x] `Model.graph_stats(verbose:, as_of:)` + `connection.graph_stats(collection:, verbose:, as_of:)` — `SHOW GRAPH STATS`, scoped form
 - [x] `Graph#graph_algo(:pagerank, personalization: {...})` — NodeDB v0.3.0 personalized PageRank with Hash → JSON encoding (via nodedb-ruby `SQL::Graph.algo`)
 - [x] `connection.show_stats / show_metrics / show_memory / show_roles / show_tenant / show_tenants / set_tenant` — operational SHOW surface; tenant identifier args validated through a strict allowlist to avoid SQL-injection through the bare-identifier interpolation
 - [x] Sample Rails 8 app with full CRUD walkthrough: [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails)
@@ -521,8 +520,8 @@ Moved to [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — NodeDB-side
 quirks grouped by user impact (resolved upstream, adapter-compensated,
 requires awareness, open). Per-bug reproductions and workaround history
 live in the [issue tracker](https://github.com/mkhairi/activerecord-nodedb-adapter/issues?q=%22%5Bupstream%3ANodeDB%5D%22)
-(titles prefixed `[upstream:NodeDB] BUG-NNN`). Last retested 2026-07-07
-against upstream `8e84501a`.
+(titles prefixed `[upstream:NodeDB] BUG-NNN`). Last retested 2026-07-20
+against upstream `3eaa49873`.
 
 ## License
 
