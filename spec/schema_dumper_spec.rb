@@ -5,9 +5,10 @@ require "spec_helper"
 # DESCRIBE them. The dump must skip them instead of raising (this broke
 # rails db:migrate's dump step in the sample app).
 #
-# Fixed tenant fixture, created once and never dropped: DROP USER
-# leaves dangling catalog owner references that fail the daemon's boot
-# integrity check (BUG-035).
+# Fixed tenant fixture, created once and never dropped: DROP TENANT
+# deadlocks once the tenant's built-in admin has inherited ownership
+# (BUG-051; the old BUG-035 boot brick this comment used to cite is
+# fixed upstream).
 RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
   let(:conn) { ActiveRecord::Base.connection }
 

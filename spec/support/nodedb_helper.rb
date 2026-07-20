@@ -8,10 +8,10 @@ module NodedbHelper
   rescue
     nil
   end
-  # Default database, not a dedicated test one: databases created by
-  # CREATE DATABASE are unusable on current upstream (BUG-032 — catalog
-  # reads ignore the session database), and every spec already isolates
-  # itself with a random-suffixed collection it drops afterwards.
+  # Default database by convention. CREATE DATABASE'd databases were
+  # unusable for most of the alpha (BUG-032, since fixed upstream), and
+  # every spec already isolates itself with a random-suffixed collection
+  # it drops afterwards, so a dedicated test database buys nothing.
   NODEDB_URL = ENV.fetch("NODEDB_URL", "postgres://nodedb:#{SUPERUSER_PASSWORD}@localhost:6432/nodedb")
 
   def self.connect!

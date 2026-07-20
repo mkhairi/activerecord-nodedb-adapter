@@ -392,7 +392,9 @@ module ActiveRecord
       end
 
       # Use NodeDB's DESCRIBE command instead of the pg_attribute system-catalog
-      # query that AR normally uses. See BUG-007.
+      # query that AR normally uses. Still required: AR's stock query filters on
+      # a quoted-identifier regclass cast that resolves NULL upstream (BUG-046;
+      # originally BUG-007's missing catalog tables, since fixed).
       #
       # DESCRIBE returns: [field, type, nullable]
       # Maps to the 10-element array new_column_from_field expects:
