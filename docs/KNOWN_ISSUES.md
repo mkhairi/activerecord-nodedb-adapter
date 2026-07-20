@@ -114,6 +114,14 @@ You write idiomatic AR; the adapter swallows the workaround:
   rebuild recovers. Avoid DROP + CREATE of the same collection name
   on daemons you care about; verify recreated definitions again after
   several minutes.
+- **BUG-051 — DROP TENANT deadlocks once the built-in tenant admin
+  inherits ownership** (`eea86b279`): `DROP USER` reassigns owned
+  objects (including drop-retention tombstones) to `<tenant>_admin`;
+  `DROP TENANT` then refuses to drop that admin ("no active
+  administrative principal available for ownership reassignment"),
+  and the second-admin route is circular ("users still belong to
+  it"). Any tenant in which a user ever owned a collection is
+  permanently undroppable. Treat tenants as provision-only.
 - **Spatial read-side accessors** — `ST_AsText` / `ST_X` / `ST_Y`
   return empty and `ST_DWithin` rejects constructor arguments, so
   spatial predicates remain unusable (write path works; raw GeoJSON
