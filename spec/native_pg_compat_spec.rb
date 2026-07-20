@@ -102,6 +102,48 @@ RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::NativePGCompat do
     end
   end
 
+  describe "transaction tracking" do
+    it "goes intrans on BEGIN" do
+      conn.async_exec("BEGIN")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_INTRANS)
+    end
+
+    it "stays intrans after SAVEPOINT" do
+      conn.async_exec("BEGIN")
+      conn.async_exec("SAVEPOINT active_record_1")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_INTRANS)
+    end
+
+    it "stays intrans after ROLLBACK TO SAVEPOINT (the bug this plan fixes)" do
+      conn.async_exec("BEGIN")
+      conn.async_exec("ROLLBACK TO SAVEPOINT active_record_1")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_INTRANS)
+    end
+
+    it "stays intrans after RELEASE SAVEPOINT" do
+      conn.async_exec("BEGIN")
+      conn.async_exec("RELEASE SAVEPOINT active_record_1")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_INTRANS)
+    end
+
+    it "goes idle on COMMIT" do
+      conn.async_exec("BEGIN")
+      conn.async_exec("COMMIT")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_IDLE)
+    end
+
+    it "goes idle on bare ROLLBACK" do
+      conn.async_exec("BEGIN")
+      conn.async_exec("ROLLBACK")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_IDLE)
+    end
+
+    it "goes intrans on lowercase 'start transaction'" do
+      conn.async_exec("start transaction")
+      expect(conn.transaction_status).to eq(PG::PQTRANS_INTRANS)
+    end
+  end
+
   describe "connection lifecycle surface" do
     it "reports OK status, server_version, finished?, and closes" do
       expect(conn.status).to eq(PG::CONNECTION_OK)

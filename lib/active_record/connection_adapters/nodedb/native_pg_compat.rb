@@ -55,7 +55,7 @@ module ActiveRecord
           def coders = []
         end
 
-        TXN_RE = /\A\s*(BEGIN|START\s+TRANSACTION|COMMIT|END|ROLLBACK)/i
+        TXN_RE = /\A\s*(BEGIN|START\s+TRANSACTION|COMMIT|END|ROLLBACK(?!\s+TO\b))\b/i
 
         SSL_DEMANDING_MODES = %w[require verify-ca verify-full].freeze
 
