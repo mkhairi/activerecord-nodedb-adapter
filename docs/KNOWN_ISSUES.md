@@ -54,6 +54,21 @@ You write idiomatic AR; the adapter swallows the workaround:
 
 ## Requires user awareness
 
+- **BUG-054 — `LIMIT` on a virtual-catalog join returns 0 rows**
+  (`74febcf80`): joining two pg_catalog tables (pg_type/pg_range,
+  pg_attribute/pg_attrdef, …) with a `LIMIT` clause silently empties
+  the result; the same query without LIMIT is correct, and real
+  collections are unaffected. AR's stock reflection carries no LIMIT,
+  so Rails apps are shielded; hand-written catalog queries should
+  omit LIMIT and truncate client-side.
+- **BUG-055 — qualified same-name columns in a join select list all
+  resolve to the last table's value** (`74febcf80`): with two joined
+  collections both carrying `id`, `SELECT w.id, b.id` returns the
+  b-side value in BOTH columns; aliasing each projection
+  (`w.id AS w_id, b.id AS b_id`) is correct. AR's eager_load aliases
+  every column and plain `.joins` projects only the base table, so
+  idiomatic AR is largely shielded — custom
+  `select("a.id, b.id")`-style projections must alias.
 - **BUG-053 — `count(*)` on a recreated same-name collection reports
   the dropped predecessor's row count until the first write**
   (`74febcf80`): after `DROP COLLECTION x` + `CREATE COLLECTION x`,
@@ -71,10 +86,12 @@ You write idiomatic AR; the adapter swallows the workaround:
 ## Open, no workaround
 
 - **Spatial read-side accessors** — `ST_AsText` / `ST_X` / `ST_Y`
-  return empty and `ST_DWithin` rejects constructor arguments, so
-  spatial predicates remain unusable (write path works; raw GeoJSON
-  column reads work). Last verified on `8e84501a`; not retested on
-  `74febcf80`.
-- **`ROLLBACK AND CHAIN` unsupported** — surfaces when AR retries a
-  failed nested transaction. A translation shim (`ROLLBACK; BEGIN`) is
-  a possible future adapter addition. Last verified on `8e84501a`.
+  return empty and `ST_DWithin` rejects `ST_GeomFromText(...)`
+  arguments ("invalid geometry … Invalid JSON value"), so spatial
+  predicates remain unusable. The write path is healthy:
+  `ST_GeomFromText` IS evaluated on INSERT and the stored GeoJSON
+  reads back correctly as a raw column. Retested on `74febcf80`.
+- **`ROLLBACK AND CHAIN` unsupported** ("unsupported: statement
+  type") — surfaces when AR retries a failed nested transaction. A
+  translation shim (`ROLLBACK; BEGIN`) is a possible future adapter
+  addition. Retested on `74febcf80`.
