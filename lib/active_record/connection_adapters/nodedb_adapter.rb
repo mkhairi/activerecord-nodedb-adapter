@@ -378,11 +378,12 @@ module ActiveRecord
         super
       end
 
-      # load_additional_types references pg_type columns like `typelem` that
-      # the new vquery evaluator does not expose ("eval: unknown column").
-      # Skip on every transport — base types are registered by
-      # initialize_type_map's static section, and model attribute casting
-      # is driven by the overridden #column_definitions (DESCRIBE).
+      # AR's pg_type discovery queries now parse and run upstream, but
+      # NodeDB's virtual pg_type carries only base scalar types — the
+      # extra round-trips (three per connection) register nothing the
+      # static section of initialize_type_map doesn't already cover.
+      # Skip on every transport; model attribute casting is driven by
+      # the overridden #column_definitions (DESCRIBE).
       def load_additional_types(oids = nil)
         # no-op
       end
@@ -392,9 +393,11 @@ module ActiveRecord
       end
 
       # Use NodeDB's DESCRIBE command instead of the pg_attribute system-catalog
-      # query that AR normally uses. Still required: AR's stock query filters on
-      # a quoted-identifier regclass cast that resolves NULL upstream (BUG-046;
-      # originally BUG-007's missing catalog tables, since fixed).
+      # query that AR normally uses. The original justifications (BUG-007
+      # missing catalog tables, BUG-046 quoted-identifier regclass) are fixed
+      # upstream, but the bypass is still required: pg_attribute coverage is
+      # per-engine — vector-engine collections expose 0 rows and kv
+      # collections miss columns, while DESCRIBE is complete everywhere.
       #
       # DESCRIBE returns: [field, type, nullable]
       # Maps to the 10-element array new_column_from_field expects:
