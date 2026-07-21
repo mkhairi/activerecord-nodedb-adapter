@@ -17,7 +17,9 @@ restart wedge (BUG-050), the drop-retention instability (BUG-049), and
 the DROP TENANT deadlock (BUG-051) are all gone; the native transport
 passes the full engine smoke at parity with pgwire for the first time.
 New this round: BUG-053, a mild stale-`count(*)` residue after
-same-name collection recreates.
+same-name collection recreates — fixed upstream on `bece8812d`
+(retested 2026-07-22, fresh data directory; single- and multi-row
+predecessors, fresh connections).
 
 ## Adapter compensates transparently
 
@@ -69,14 +71,6 @@ You write idiomatic AR; the adapter swallows the workaround:
   every column and plain `.joins` projects only the base table, so
   idiomatic AR is largely shielded — custom
   `select("a.id, b.id")`-style projections must alias.
-- **BUG-053 — `count(*)` on a recreated same-name collection reports
-  the dropped predecessor's row count until the first write**
-  (`74febcf80`): after `DROP COLLECTION x` + `CREATE COLLECTION x`,
-  the new empty collection's `count(*)` returns the old collection's
-  count (full scans are correct, and the stale value heals on the
-  first INSERT). Emptiness checks (`Model.count`, count-based
-  `exists?` patterns) lie right after a same-name rebuild — e.g.
-  `db:schema:load`-style flows. Use a scan-based check if it matters.
 - **`SEARCH` cannot be wrapped in subqueries** (`IN (SEARCH ...)`,
   `FROM (SEARCH ...)` fail to parse). The `Vector` concern returns
   id + surrogate + distance; note the `id` column is only the document
