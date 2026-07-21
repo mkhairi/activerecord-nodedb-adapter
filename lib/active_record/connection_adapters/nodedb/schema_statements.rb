@@ -114,7 +114,7 @@ module ActiveRecord
         #     column: :embedding, metric: :cosine, dim: 384
         def create_vector_index(index_name, on:, column:, dim:, metric: :cosine)
           sql = "CREATE VECTOR INDEX #{index_name} " \
-                "ON #{on} " \
+                "ON #{on} (#{column}) " \
                 "METRIC #{metric.to_s.upcase} DIM #{dim.to_i}"
           execute_nodedb(sql)
         end

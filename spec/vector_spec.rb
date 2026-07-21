@@ -45,4 +45,34 @@ RSpec.describe NodeDB::Vector, :integration do
     distances = results.map { |r| r["distance"] }
     expect(distances).to eq(distances.sort)
   end
+
+  it "binds the index to the named column, not a default field" do
+    other = "test_articles_#{SecureRandom.hex(4)}"
+    conn.create_collection(other)
+    conn.create_vector_index(
+      "idx_#{other}_myvec",
+      on: other,
+      column: :myvec,
+      metric: :cosine,
+      dim: 3
+    )
+    conn.execute(
+      "INSERT INTO #{other} (id, myvec) VALUES ('m1', ARRAY[0.1, 0.2, 0.3])"
+    )
+
+    tname = other
+    model_class = Class.new(ActiveRecord::Base) do
+      self.table_name = tname
+      include NodeDB::Vector
+
+      vector_column :myvec, dim: 3
+    end
+    stub_const("TestNote", model_class)
+
+    results = TestNote.search_vector(:myvec, [0.1, 0.2, 0.3], limit: 1)
+    expect(results.length).to eq(1)
+    expect(results.first["distance"]).to be_within(0.01).of(0.0)
+  ensure
+    conn.drop_collection(other, if_exists: true)
+  end
 end
