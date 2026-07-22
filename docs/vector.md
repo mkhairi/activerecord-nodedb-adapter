@@ -28,14 +28,15 @@ Article.search_vector(:embedding, query_embedding, limit: 10)
 Article.search_vector(:embedding, query_embedding, limit: 5, filter: "published = true")
 ```
 
-`search_vector` returns an Array of `{ "surrogate", "distance" }`
-hashes. NodeDB's `SEARCH ... USING VECTOR()` returns internal surrogate
-IDs plus distances — it does **not** project document fields, and
-`SEARCH` cannot be wrapped in a subquery. Look up content with a
-follow-up query when needed.
+`search_vector` returns an Array of `{ "id", "surrogate", "distance" }`
+hashes. NodeDB's `SEARCH ... USING VECTOR()` returns the document id and
+the internal surrogate id plus the distance — it does **not** project
+other document fields, and `SEARCH` cannot be wrapped in a subquery.
+Look up content with a follow-up query when needed.
 
-The `SEARCH` parser rejects quoted identifiers, so the concern emits
-bare table/column names.
+The `SEARCH` parser rejects a quoted collection name (a quoted column
+is accepted since upstream `b04047b13`), so the concern emits bare
+table/column names.
 
 ## SQL emitted
 
