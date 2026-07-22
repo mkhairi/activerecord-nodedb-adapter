@@ -9,17 +9,23 @@ comments). This list tracks the **latest upstream
 only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
-Last retested: **2026-07-21** against upstream `main` at `74febcf80`.
-Cleanest wave so far: everything open from the 0.4.0 era —
-BUG-045…051 and the sample app's ghost-tuple report (BUG-052) — is
-fixed or no longer reproducible on a fresh data directory. The graph
-restart wedge (BUG-050), the drop-retention instability (BUG-049), and
-the DROP TENANT deadlock (BUG-051) are all gone; the native transport
-passes the full engine smoke at parity with pgwire for the first time.
-New this round: BUG-053, a mild stale-`count(*)` residue after
-same-name collection recreates — fixed upstream on `bece8812d`
-(retested 2026-07-22, fresh data directory; single- and multi-row
-predecessors, fresh connections).
+Last retested: **2026-07-22** against upstream `main` at `7bd4d24b6`.
+Everything open from the 0.4.0 era — BUG-045…051 and the sample app's
+ghost-tuple report (BUG-052) — is fixed or no longer reproducible on a
+fresh data directory. The graph restart wedge (BUG-050), the
+drop-retention instability (BUG-049), and the DROP TENANT deadlock
+(BUG-051) are all gone; the native transport passes the full engine
+smoke at parity with pgwire.
+
+Also fixed upstream and pruned this round: BUG-053 (stale `count(*)`
+after a same-name recreate, fixed on `bece8812d`), plus the two catalog
+and join-projection defects — BUG-054 (`LIMIT` on a catalog join
+returned 0 rows) and BUG-055 (unaliased qualified same-name columns all
+resolved to the last table's value), both fixed on `7bd4d24b6`. One
+user-visible note survives BUG-055: over **HTTP**, a projection whose
+output columns share a name now emits `{"id": …, "id_1": …}`, because a
+JSON object cannot repeat a key. pgwire and native are positional and
+still report both columns as `id`, so the adapter is unaffected.
 
 ## Adapter compensates transparently
 
@@ -56,21 +62,6 @@ You write idiomatic AR; the adapter swallows the workaround:
 
 ## Requires user awareness
 
-- **BUG-054 — `LIMIT` on a virtual-catalog join returns 0 rows**
-  (`74febcf80`): joining two pg_catalog tables (pg_type/pg_range,
-  pg_attribute/pg_attrdef, …) with a `LIMIT` clause silently empties
-  the result; the same query without LIMIT is correct, and real
-  collections are unaffected. AR's stock reflection carries no LIMIT,
-  so Rails apps are shielded; hand-written catalog queries should
-  omit LIMIT and truncate client-side.
-- **BUG-055 — qualified same-name columns in a join select list all
-  resolve to the last table's value** (`74febcf80`): with two joined
-  collections both carrying `id`, `SELECT w.id, b.id` returns the
-  b-side value in BOTH columns; aliasing each projection
-  (`w.id AS w_id, b.id AS b_id`) is correct. AR's eager_load aliases
-  every column and plain `.joins` projects only the base table, so
-  idiomatic AR is largely shielded — custom
-  `select("a.id, b.id")`-style projections must alias.
 - **`SEARCH` cannot be wrapped in subqueries** (`IN (SEARCH ...)`,
   `FROM (SEARCH ...)` fail to parse). The `Vector` concern returns
   id + surrogate + distance; note the `id` column is only the document
@@ -84,8 +75,8 @@ You write idiomatic AR; the adapter swallows the workaround:
   arguments ("invalid geometry … Invalid JSON value"), so spatial
   predicates remain unusable. The write path is healthy:
   `ST_GeomFromText` IS evaluated on INSERT and the stored GeoJSON
-  reads back correctly as a raw column. Retested on `74febcf80`.
+  reads back correctly as a raw column. Retested on `7bd4d24b6`.
 - **`ROLLBACK AND CHAIN` unsupported** ("unsupported: statement
   type") — surfaces when AR retries a failed nested transaction. A
   translation shim (`ROLLBACK; BEGIN`) is a possible future adapter
-  addition. Retested on `74febcf80`.
+  addition. Retested on `7bd4d24b6`.
