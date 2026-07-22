@@ -42,7 +42,7 @@ You write idiomatic AR; the adapter swallows the workaround:
   / `pg_advisory_unlock` now parse but return NULL and grant no mutual
   exclusion (a second session's `pg_try_advisory_lock` on a held key
   still succeeds), and `pg_locks` does not exist — the collection-based
-  mutex stays.
+  mutex stays. Tracked as BUG-060.
 - **Edge-store keys track the IN-clause spelling verbatim** — a
   double-quoted identifier in `GRAPH INSERT EDGE IN "name"` stores a
   literal-quoted key that scoped `SHOW GRAPH STATS` lookups miss. The
@@ -56,14 +56,18 @@ You write idiomatic AR; the adapter swallows the workaround:
 - **GRAPH TRAVERSE / INSERT EDGE quirks** — JSON-array row parsed and
   `IN 'collection'` threaded automatically by the `Graph` concern;
   harmless libpq stderr noise filtered by `Graph.silence_libpq_noise`.
-- **`SEARCH ... USING VECTOR()` rejects a quoted collection name**
-  (`SEARCH "articles" USING …` is a parse error; a quoted *column*
-  is accepted as of `b04047b13`) — the `Vector` concern emits bare
-  names either way.
+- **BUG-059 — `SEARCH ... USING VECTOR()` rejects a quoted collection
+  name** (`SEARCH "articles" USING …` is a parse error; a quoted
+  *column* is accepted as of `b04047b13`) — the `Vector` concern emits
+  bare names either way.
+- **BUG-061 — `CREATE VECTOR INDEX … WITH (dim, metric)` is accepted
+  but yields an index that matches nothing** (the documented
+  `METRIC <M> DIM <n>` form works). `create_vector_index` always emits
+  the working form; only hand-written raw DDL is at risk.
 
 ## Requires user awareness
 
-- **`SEARCH` cannot be wrapped in subqueries** — `FROM (SEARCH ...)`
+- **BUG-058 — `SEARCH` cannot be wrapped in subqueries** — `FROM (SEARCH ...)`
   and `IN (SEARCH ...)` still fail to parse on `b04047b13`, so a hybrid
   query has to be two round trips. The `Vector` concern returns
   id + surrogate + distance; `id` is the document id (also on plain
@@ -72,13 +76,13 @@ You write idiomatic AR; the adapter swallows the workaround:
 
 ## Open, no workaround
 
-- **Spatial read-side accessors** — `ST_AsText` / `ST_X` / `ST_Y`
+- **BUG-056 — spatial read-side accessors** — `ST_AsText` / `ST_X` / `ST_Y`
   return empty and `ST_DWithin` rejects `ST_GeomFromText(...)`
   arguments ("invalid geometry … Invalid JSON value"), so spatial
   predicates remain unusable. The write path is healthy:
   `ST_GeomFromText` IS evaluated on INSERT and the stored GeoJSON
   reads back correctly as a raw column. Retested on `b04047b13`.
-- **`ROLLBACK AND CHAIN` unsupported** ("unsupported: statement
+- **BUG-057 — `ROLLBACK AND CHAIN` unsupported** ("unsupported: statement
   type: ROLLBACK AND CHAIN") — surfaces when AR retries a failed
   nested transaction. A translation shim (`ROLLBACK; BEGIN`) is a
   possible future adapter addition. Retested on `b04047b13`.
