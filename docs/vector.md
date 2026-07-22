@@ -35,7 +35,7 @@ other document fields, and `SEARCH` cannot be wrapped in a subquery.
 Look up content with a follow-up query when needed.
 
 The `SEARCH` parser rejects a quoted collection name (a quoted column
-is accepted since upstream `b04047b13`), so the concern emits bare
+is accepted since upstream `7bd4d24b6`), so the concern emits bare
 table/column names.
 
 ## SQL emitted

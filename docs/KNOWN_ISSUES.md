@@ -9,7 +9,7 @@ comments). This list tracks the **latest upstream
 only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
-Last retested: **2026-07-22** against upstream `main` at `b04047b13`.
+Last retested: **2026-07-22** against upstream `main` at `7bd4d24b6`.
 Everything open from the 0.4.0 era (BUG-045…052) plus BUG-053, BUG-054
 and BUG-055 is fixed or no longer reproducible and has been pruned; the
 native transport passes the full engine smoke at parity with pgwire.
@@ -38,7 +38,7 @@ You write idiomatic AR; the adapter swallows the workaround:
   `advisory_lock_exists?`, and `NODEDB_ADVISORY_LOCK_PREFIX`
   namespacing. Caveat: not session-scoped — a crashed holder's lock
   is stolen after `advisory_lock_ttl` seconds (config, default 3600).
-  Retested on `b04047b13`: `pg_advisory_lock` / `pg_try_advisory_lock`
+  Retested on `7bd4d24b6`: `pg_advisory_lock` / `pg_try_advisory_lock`
   / `pg_advisory_unlock` now parse but return NULL and grant no mutual
   exclusion (a second session's `pg_try_advisory_lock` on a held key
   still succeeds), and `pg_locks` does not exist — the collection-based
@@ -58,7 +58,7 @@ You write idiomatic AR; the adapter swallows the workaround:
   harmless libpq stderr noise filtered by `Graph.silence_libpq_noise`.
 - **BUG-059 — `SEARCH ... USING VECTOR()` rejects a quoted collection
   name** (`SEARCH "articles" USING …` is a parse error; a quoted
-  *column* is accepted as of `b04047b13`) — the `Vector` concern emits
+  *column* is accepted as of `7bd4d24b6`) — the `Vector` concern emits
   bare names either way.
 - **BUG-061 — `CREATE VECTOR INDEX … WITH (dim, metric)` is accepted
   but yields an index that matches nothing** (the documented
@@ -68,11 +68,11 @@ You write idiomatic AR; the adapter swallows the workaround:
 ## Requires user awareness
 
 - **BUG-058 — `SEARCH` cannot be wrapped in subqueries** — `FROM (SEARCH ...)`
-  and `IN (SEARCH ...)` still fail to parse on `b04047b13`, so a hybrid
+  and `IN (SEARCH ...)` still fail to parse on `7bd4d24b6`, so a hybrid
   query has to be two round trips. The `Vector` concern returns
   id + surrogate + distance; `id` is the document id (also on plain
   document collections carrying a vector index, retested on
-  `b04047b13`), so a follow-up `find` gets you the record.
+  `7bd4d24b6`), so a follow-up `find` gets you the record.
 
 ## Open, no workaround
 
@@ -81,8 +81,8 @@ You write idiomatic AR; the adapter swallows the workaround:
   arguments ("invalid geometry … Invalid JSON value"), so spatial
   predicates remain unusable. The write path is healthy:
   `ST_GeomFromText` IS evaluated on INSERT and the stored GeoJSON
-  reads back correctly as a raw column. Retested on `b04047b13`.
+  reads back correctly as a raw column. Retested on `7bd4d24b6`.
 - **BUG-057 — `ROLLBACK AND CHAIN` unsupported** ("unsupported: statement
   type: ROLLBACK AND CHAIN") — surfaces when AR retries a failed
   nested transaction. A translation shim (`ROLLBACK; BEGIN`) is a
-  possible future adapter addition. Retested on `b04047b13`.
+  possible future adapter addition. Retested on `7bd4d24b6`.
