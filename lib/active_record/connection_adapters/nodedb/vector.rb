@@ -26,7 +26,7 @@ module NodeDB
       # vector-engine collections; on document collections with a vector
       # index it is a result ordinal — don't treat it as a key there.
       # Note: SEARCH parser rejects a quoted collection name — bare names
-      # required (quoted columns parse since upstream b04047b13).
+      # required (quoted columns parse since upstream 7bd4d24b6).
       def search_vector(column, embedding, limit: 10, filter: nil)
         sql = NodeDB::SQL::Vector.search(
           table: table_name,
