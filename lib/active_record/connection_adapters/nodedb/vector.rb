@@ -25,7 +25,8 @@ module NodeDB
       # pgwire and native). Caveat: `id` is only the document id on
       # vector-engine collections; on document collections with a vector
       # index it is a result ordinal — don't treat it as a key there.
-      # Note: SEARCH parser rejects quoted identifiers — bare names required.
+      # Note: SEARCH parser rejects a quoted collection name — bare names
+      # required (quoted columns parse since upstream b04047b13).
       def search_vector(column, embedding, limit: 10, filter: nil)
         sql = NodeDB::SQL::Vector.search(
           table: table_name,
