@@ -106,6 +106,16 @@ module ActiveRecord
         false
       end
 
+      # BUG-064 workaround: NodeDB has no `current_database()`, so AR's
+      # stock `SELECT current_database()` raises PG::UndefinedFunction and
+      # `rails db:migrate` aborts before running a single migration.
+      # The adapter already knows the database it dialed — answer from the
+      # connection parameters instead of asking the server. Remove once
+      # upstream implements the function.
+      def current_database
+        @connection_parameters[:dbname].to_s
+      end
+
       # NodeDB doesn't answer `SHOW max_identifier_length` on any
       # transport — pgwire errors with "unrecognized configuration
       # parameter", which crashes AR's grouped calculations
