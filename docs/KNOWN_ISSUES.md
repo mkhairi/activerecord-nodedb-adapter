@@ -9,12 +9,14 @@ comments). This list tracks the **latest upstream
 only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
-Last retested: **2026-07-22** against upstream `main` at `7bd4d24b6`.
-Everything open from the 0.4.0 era (BUG-045…052) plus BUG-053, BUG-054
-and BUG-055 is fixed or no longer reproducible and has been pruned; the
-native transport passes the full engine smoke at parity with pgwire.
-Two upstream defects survive this retest unchanged (spatial read-side
-accessors, `ROLLBACK AND CHAIN`) — both listed at the bottom.
+Last retested: **2026-07-28** against upstream `main` at `87053aa7b`.
+BUG-056 (spatial read-side accessors), BUG-059 (quoted collection name in
+`SEARCH`), BUG-060 (advisory locks returning NULL) and BUG-061 (inert
+`WITH (...)` vector index) are fixed and have been pruned. BUG-058 is
+partially fixed — `SEARCH` composes as a derived table now, only the
+`IN`-predicate shapes remain. Three new upstream defects landed with this
+build: BUG-062 (first timeseries row loses its columns), BUG-063 (TIME_KEY
+projection/type change) and BUG-064 (`current_database()` missing).
 
 One user-visible note survives BUG-055: over **HTTP**, a projection
 whose output columns share a name emits `{"id": …, "id_1": …}`, because
@@ -38,11 +40,10 @@ You write idiomatic AR; the adapter swallows the workaround:
   `advisory_lock_exists?`, and `NODEDB_ADVISORY_LOCK_PREFIX`
   namespacing. Caveat: not session-scoped — a crashed holder's lock
   is stolen after `advisory_lock_ttl` seconds (config, default 3600).
-  Retested on `7bd4d24b6`: `pg_advisory_lock` / `pg_try_advisory_lock`
-  / `pg_advisory_unlock` now parse but return NULL and grant no mutual
-  exclusion (a second session's `pg_try_advisory_lock` on a held key
-  still succeeds), and `pg_locks` does not exist — the collection-based
-  mutex stays. Tracked as BUG-060.
+  Retested on `87053aa7b`: `pg_advisory_lock` / `pg_try_advisory_lock`
+  / `pg_advisory_unlock` are back to failing loudly ("function … does
+  not exist") and `pg_locks` does not exist — advisory locks remain
+  unimplemented, so the collection-based mutex stays.
 - **Edge-store keys track the IN-clause spelling verbatim** — a
   double-quoted identifier in `GRAPH INSERT EDGE IN "name"` stores a
   literal-quoted key that scoped `SHOW GRAPH STATS` lookups miss. The
@@ -56,33 +57,38 @@ You write idiomatic AR; the adapter swallows the workaround:
 - **GRAPH TRAVERSE / INSERT EDGE quirks** — JSON-array row parsed and
   `IN 'collection'` threaded automatically by the `Graph` concern;
   harmless libpq stderr noise filtered by `Graph.silence_libpq_noise`.
-- **BUG-059 — `SEARCH ... USING VECTOR()` rejects a quoted collection
-  name** (`SEARCH "articles" USING …` is a parse error; a quoted
-  *column* is accepted as of `7bd4d24b6`) — the `Vector` concern emits
-  bare names either way.
-- **BUG-061 — `CREATE VECTOR INDEX … WITH (dim, metric)` is accepted
-  but yields an index that matches nothing** (the documented
-  `METRIC <M> DIM <n>` form works). `create_vector_index` always emits
-  the working form; only hand-written raw DDL is at risk.
+- **BUG-063 — timeseries TIME_KEY column** — upstream no longer renames
+  the `TIME_KEY` column to `timestamp` on read, and a column declared
+  `TIMESTAMP TIME_KEY` returns epoch-ms integers under OID 1114.
+  `create_collection(engine: :timeseries)` therefore declares
+  `timestamp BIGINT TIME_KEY`, which keeps `NodeDB::Timeseries#since` /
+  `#until_time` / `#time_bucket` working and keeps driver typecasting
+  honest. Collections declaring a differently-named TIME_KEY need their
+  own WHERE clauses.
 
 ## Requires user awareness
 
-- **BUG-058 — `SEARCH` cannot be wrapped in subqueries** — `FROM (SEARCH ...)`
-  and `IN (SEARCH ...)` still fail to parse on `7bd4d24b6`, so a hybrid
-  query has to be two round trips. The `Vector` concern returns
-  id + surrogate + distance; `id` is the document id (also on plain
-  document collections carrying a vector index, retested on
-  `7bd4d24b6`), so a follow-up `find` gets you the record.
+- **BUG-058 — `SEARCH` composes as a derived table but not in an
+  `IN` predicate** — `FROM (SEARCH ...) s` works on `87053aa7b`
+  (outer `WHERE` / `ORDER BY` / `LIMIT` included). `IN (SEARCH ...)`
+  errors ("subquery projection must be a column reference"), and the
+  `IN (SELECT id FROM (SEARCH ...) s)` spelling silently returns zero
+  rows — do not use it. A hybrid query that needs an `IN` predicate is
+  still two round trips. The `Vector` concern returns
+  id + surrogate + distance; `id` is the document id, so a follow-up
+  `find` gets you the record.
 
 ## Open, no workaround
 
-- **BUG-056 — spatial read-side accessors** — `ST_AsText` / `ST_X` / `ST_Y`
-  return empty and `ST_DWithin` rejects `ST_GeomFromText(...)`
-  arguments ("invalid geometry … Invalid JSON value"), so spatial
-  predicates remain unusable. The write path is healthy:
-  `ST_GeomFromText` IS evaluated on INSERT and the stored GeoJSON
-  reads back correctly as a raw column. Retested on `7bd4d24b6`.
+- **BUG-062 — first timeseries row loses every non-TIME_KEY column** —
+  on a timeseries collection created with an explicit column list (what
+  `create_collection(engine: :timeseries)` emits), the first inserted
+  row keeps only its TIME_KEY value; all other fields come back NULL.
+  Later inserts are stored correctly and nothing reports the loss.
+- **BUG-064 — `current_database()` does not exist** — stock
+  `rails db:migrate` aborts before running any migration
+  (`PG::UndefinedFunction`). `current_schema()` is present.
 - **BUG-057 — `ROLLBACK AND CHAIN` unsupported** ("unsupported: statement
   type: ROLLBACK AND CHAIN") — surfaces when AR retries a failed
   nested transaction. A translation shim (`ROLLBACK; BEGIN`) is a
-  possible future adapter addition. Retested on `7bd4d24b6`.
+  possible future adapter addition. Retested on `87053aa7b`.

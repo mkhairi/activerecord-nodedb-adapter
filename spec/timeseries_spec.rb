@@ -15,10 +15,12 @@ RSpec.describe NodeDB::Timeseries, :integration do
     end
     stub_const("TestMetric", model_class)
 
-    # NodeDB timeseries: insert via the declared TIME_KEY column name (ts)
-    conn.execute("INSERT INTO #{collection_name} (ts, host, cpu) VALUES ('2026-05-09 10:00:00', 'web-01', 0.45)")
-    conn.execute("INSERT INTO #{collection_name} (ts, host, cpu) VALUES ('2026-05-09 10:05:00', 'web-01', 0.55)")
-    conn.execute("INSERT INTO #{collection_name} (ts, host, cpu) VALUES ('2026-05-09 09:00:00', 'db-01',  0.80)")
+    # NodeDB timeseries: insert via the declared TIME_KEY column name, which
+    # defaults to `timestamp`, carrying epoch-ms integers (what the
+    # NodeDB::SQL::Timeseries clauses compare against).
+    conn.execute("INSERT INTO #{collection_name} (timestamp, host, cpu) VALUES (#{Time.parse("2026-05-09 10:00:00 UTC").to_i * 1000}, 'web-01', 0.45)")
+    conn.execute("INSERT INTO #{collection_name} (timestamp, host, cpu) VALUES (#{Time.parse("2026-05-09 10:05:00 UTC").to_i * 1000}, 'web-01', 0.55)")
+    conn.execute("INSERT INTO #{collection_name} (timestamp, host, cpu) VALUES (#{Time.parse("2026-05-09 09:00:00 UTC").to_i * 1000}, 'db-01',  0.80)")
   end
 
   after(:each) { conn.drop_collection(collection_name, if_exists: true) }
