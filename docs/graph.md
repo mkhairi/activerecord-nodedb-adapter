@@ -83,8 +83,8 @@ so a double-quoted identifier would create a key that scoped
 ## Known limitations (current upstream)
 
 - **No MATCH helper yet** — upstream's Cypher-style
-  `MATCH ... IN <collection>` executor ignores the collection scope
-  and returns edges from every collection in the tenant (BUG-023), so
-  the concern doesn't expose it.
-- Plain `DROP COLLECTION` leaves the collection's edge-store entries
-  visible to `SHOW GRAPH STATS` (same upstream bug family).
+  `MATCH ... IN <collection>` now honours the collection scope, but the
+  concern doesn't expose a builder for it.
+- A scoped `SHOW GRAPH STATS '<name>'` against a dropped collection
+  errors with "collection is deactivated" rather than returning an
+  empty row; the unscoped form simply omits it.

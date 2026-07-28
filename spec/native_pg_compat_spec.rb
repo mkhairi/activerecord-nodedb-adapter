@@ -54,7 +54,7 @@ RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::NativePGCompat do
     end
   end
 
-  describe "raw result passthrough (post-BUG-018)" do
+  describe "raw result passthrough" do
     it "passes a GRAPH TRAVERSE {nodes,edges} 'result' payload through untouched" do
       payload = '{"nodes":[{"id":"alice","depth":0},{"id":"bob","depth":1}],"edges":[]}'
       native = Class.new do

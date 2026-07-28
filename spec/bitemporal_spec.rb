@@ -52,7 +52,7 @@ RSpec.describe NodeDB::Bitemporal, :integration do
     end
   end
 
-  it "persists destroy() and keeps the version trail (BUG-024 regression guard)" do
+  it "persists destroy() and keeps the version trail (regression guard)" do
     BtOrder.find("o2").destroy
 
     expect(BtOrder.where(id: "o2").to_a).to be_empty

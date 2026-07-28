@@ -20,9 +20,8 @@ module ActiveRecord
           TEXT_OID = 25
 
           # Native results project the plan's declared columns the same
-          # way pgwire does (upstream response-shaping rework — BUG-018
-          # resolved), so the wrapper is a straight shape adapter with no
-          # blob normalisation.
+          # way pgwire does, so the wrapper is a straight shape adapter
+          # with no blob normalisation.
           def initialize(native_result)
             @columns = native_result.fields
             @rows = native_result.values

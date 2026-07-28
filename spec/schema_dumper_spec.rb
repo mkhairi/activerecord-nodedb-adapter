@@ -6,9 +6,8 @@ require "spec_helper"
 # rails db:migrate's dump step in the sample app).
 #
 # Fixed tenant fixture, created once and never dropped: DROP TENANT
-# deadlocks once the tenant's built-in admin has inherited ownership
-# (BUG-051; the old BUG-035 boot brick this comment used to cite is
-# fixed upstream).
+# has deadlocked once the tenant's built-in admin inherited ownership,
+# and the fixture is cheap to keep around.
 RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
   let(:conn) { ActiveRecord::Base.connection }
 

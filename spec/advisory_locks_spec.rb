@@ -1,10 +1,10 @@
 require "spec_helper"
 
-# BUG-014: NodeDB has no advisory-lock primitives (upstream won't-fix
-# on the pgwire surface), so the adapter implements the AR migration
+# NodeDB has no advisory-lock primitives (upstream won't-fix on the
+# pgwire surface), so the adapter implements the AR migration
 # mutex application-level: a document_strict lock collection whose
 # TEXT PRIMARY KEY makes acquisition an atomic INSERT.
-RSpec.describe "collection-based advisory locks (BUG-014)", :integration do
+RSpec.describe "collection-based advisory locks", :integration do
   let(:conn) { ActiveRecord::Base.connection }
   let(:coll) { ActiveRecord::ConnectionAdapters::NodedbAdapter::ADVISORY_LOCKS_COLLECTION }
   let(:lock_id) { rand(1_000_000..9_999_999) }
@@ -63,7 +63,7 @@ end
 
 # Block API modeled on the with_advisory_lock gem: guaranteed release,
 # bounded waiting, reentrancy, introspection.
-RSpec.describe "with_advisory_lock block API (BUG-014)", :integration do
+RSpec.describe "with_advisory_lock block API", :integration do
   let(:conn) { ActiveRecord::Base.connection }
   let(:coll) { ActiveRecord::ConnectionAdapters::NodedbAdapter::ADVISORY_LOCKS_COLLECTION }
   let(:name) { "spec-lock-#{SecureRandom.hex(4)}" }

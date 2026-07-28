@@ -18,8 +18,9 @@ end
 ```
 
 The adapter emits the `ENGINE = document_strict` suffix spelling for
-bitemporal DDL — the `WITH (engine=...)` form builds a broken
-bitemporal schema upstream (BUG-027).
+bitemporal DDL — it works on every build, while the
+`WITH (engine=...)` form built a broken bitemporal schema on older
+ones.
 
 ## Reads
 
@@ -46,8 +47,7 @@ AR relations, so history rows come back as hashes. `WHERE` composes;
 ## Writes
 
 Plain ActiveRecord on current upstream: `create!` / `update!` /
-`destroy` persist and version normally (the old BUG-024 transactional
-write loss is fixed). Prefer the `NodeDB::Bitemporal` concern for
+`destroy` persist and version normally. Prefer the `NodeDB::Bitemporal` concern for
 time-travel reads:
 
 ```ruby
@@ -63,12 +63,12 @@ AuditLog.as_of(1.hour.ago)
 
 ## Sharp edges (current upstream)
 
-- **Never DROP + CREATE a bitemporal collection under the same name**
-  — the old version history resurrects into the new collection and the
-  current-state read shows a corrupted merged row (BUG-028). Only a
-  fresh data directory clears a poisoned name.
 - `count(*)` over `AS OF SYSTEM TIME NULL` counts current state, not
   versions — count history rows client-side.
+
+DROP + CREATE under the same name is safe on current upstream: the
+recreated collection starts empty and the old version history stays
+buried (it resurrected into the new collection on older builds).
 
 Full reproductions in the
 [issue tracker](https://github.com/mkhairi/activerecord-nodedb-adapter/issues?q=%22%5Bupstream%3ANodeDB%5D%22);

@@ -89,9 +89,8 @@ RSpec.describe "ActiveRecord over transport: native", :integration do
     expect(rows.rows.join).to include("delta")
   end
 
-  # BUG-022 (resolved upstream) — native SHOW now
-  # routes through the DDL router, so the ops helpers return real row
-  # sets, not the old `{"setting" => ""}` placeholder.
+  # Native SHOW routes through the DDL router, so the ops helpers
+  # return real row sets, not the old `{"setting" => ""}` placeholder.
   {show_stats: %w[name value], show_metrics: %w[name value],
    show_memory: %w[engine allocated_bytes]}.each do |op, expected_keys|
     it "returns real rows for #{op} over native" do
