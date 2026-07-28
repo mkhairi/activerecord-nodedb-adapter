@@ -11,6 +11,18 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
     expect(conn.nodedb_version).to match(/\d+\.\d+/)
   end
 
+  describe "#current_database", :integration do
+    # BUG-064: the server has no current_database() function.
+    it "answers from the connection parameters, not the server" do
+      expect { conn.query_value("SELECT current_database()", "SCHEMA") }
+        .to raise_error(ActiveRecord::StatementInvalid, /current_database/)
+
+      dbname = conn.instance_variable_get(:@connection_parameters)[:dbname]
+      expect(conn.current_database).to eq(dbname.to_s)
+      expect(conn.current_database).not_to be_empty
+    end
+  end
+
   describe "#database_version", :integration do
     it "uses the stock libpq PQserverVersion() path (BUG-043 fixed upstream)" do
       libpq_version = conn.instance_variable_get(:@raw_connection).server_version

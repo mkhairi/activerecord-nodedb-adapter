@@ -44,6 +44,11 @@ You write idiomatic AR; the adapter swallows the workaround:
   / `pg_advisory_unlock` are back to failing loudly ("function … does
   not exist") and `pg_locks` does not exist — advisory locks remain
   unimplemented, so the collection-based mutex stays.
+- **BUG-064 — `current_database()` missing** — AR's stock
+  `SELECT current_database()` raises `PG::UndefinedFunction`, which
+  aborts `rails db:migrate` before any migration runs. The adapter
+  answers `current_database` from the connection's own dbname instead
+  of asking the server. Remove once upstream implements the function.
 - **Edge-store keys track the IN-clause spelling verbatim** — a
   double-quoted identifier in `GRAPH INSERT EDGE IN "name"` stores a
   literal-quoted key that scoped `SHOW GRAPH STATS` lookups miss. The
@@ -85,9 +90,6 @@ You write idiomatic AR; the adapter swallows the workaround:
   `create_collection(engine: :timeseries)` emits), the first inserted
   row keeps only its TIME_KEY value; all other fields come back NULL.
   Later inserts are stored correctly and nothing reports the loss.
-- **BUG-064 — `current_database()` does not exist** — stock
-  `rails db:migrate` aborts before running any migration
-  (`PG::UndefinedFunction`). `current_schema()` is present.
 - **BUG-057 — `ROLLBACK AND CHAIN` unsupported** ("unsupported: statement
   type: ROLLBACK AND CHAIN") — surfaces when AR retries a failed
   nested transaction. A translation shim (`ROLLBACK; BEGIN`) is a
