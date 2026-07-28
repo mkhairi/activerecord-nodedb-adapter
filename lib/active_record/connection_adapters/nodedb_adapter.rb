@@ -129,8 +129,8 @@ module ActiveRecord
         false
       end
 
-      # BUG-014 advisory locks (migrator contract + with_advisory_lock
-      # block API) live in Nodedb::AdvisoryLocks.
+      # Advisory locks (migrator contract + with_advisory_lock block API)
+      # live in Nodedb::AdvisoryLocks.
 
       # NodeDB returns standard information_schema views over pgwire;
       # fall back gracefully for schema introspection.
@@ -184,8 +184,8 @@ module ActiveRecord
       # Shared internals: run a SHOW command and return Array<Hash>.
       # NodeDB's SHOW commands emit a standard "SELECT N" command tag so
       # libpq is happy; no stderr noise filter needed. Both transports
-      # route SHOW through the DDL router upstream (BUG-022 fixed,
-      # upstream), so no native fail-soft is needed.
+      # route SHOW through the DDL router upstream, so no native
+      # fail-soft is needed.
       def show_command(sql)
         select_all(sql).to_a
       end
@@ -333,7 +333,7 @@ module ActiveRecord
 
       # AR's stock `assume_migrated_upto_version` hardcodes
       # `INSERT INTO schema_migrations (version) …`, bypassing the
-      # BUG-016 workaround that stores the version in the NodeDB-mandatory
+      # workaround that stores the version in the NodeDB-mandatory
       # `id` column. `schema_migrations` is a strict collection with only
       # an `id` field, and NodeDB enforces that strict schema on
       # `document_strict` over BOTH transports — the `version` field is
@@ -403,9 +403,9 @@ module ActiveRecord
       end
 
       # Use NodeDB's DESCRIBE command instead of the pg_attribute system-catalog
-      # query that AR normally uses. The original justifications (BUG-007
-      # missing catalog tables, BUG-046 quoted-identifier regclass) are fixed
-      # upstream, but the bypass is still required: pg_attribute coverage is
+      # query that AR normally uses. The original justifications (missing
+      # catalog tables, quoted-identifier regclass resolving to NULL) are
+      # fixed upstream, but the bypass is still required: coverage is
       # per-engine — vector-engine collections expose 0 rows and kv
       # collections miss columns, while DESCRIBE is complete everywhere.
       #

@@ -10,25 +10,24 @@ only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
 Last retested: **2026-07-28** against upstream `main` at `87053aa7b`.
-BUG-056 (spatial read-side accessors), BUG-059 (quoted collection name in
-`SEARCH`), BUG-060 (advisory locks returning NULL) and BUG-061 (inert
-`WITH (...)` vector index) are fixed and have been pruned. BUG-058 is
-partially fixed — `SEARCH` composes as a derived table now, only the
-`IN`-predicate shapes remain. Three new upstream defects landed with this
-build: BUG-062 (first timeseries row loses its columns), BUG-063 (TIME_KEY
-projection/type change) and BUG-064 (`current_database()` missing).
+Everything tracked before this build is fixed and has been pruned
+except the entries below. Three defects landed with it: BUG-062 (first
+timeseries row loses its columns), BUG-063 (TIME_KEY projection/type
+change) and BUG-064 (`current_database()` missing), and BUG-058 is now
+limited to the `IN`-predicate shapes.
 
-One user-visible note survives BUG-055: over **HTTP**, a projection
-whose output columns share a name emits `{"id": …, "id_1": …}`, because
-a JSON object cannot repeat a key. pgwire and native are positional and
-still report both columns as `id`, so the adapter is unaffected.
+One user-visible note: over **HTTP**, a projection whose output columns
+share a name emits `{"id": …, "id_1": …}`, because a JSON object cannot
+repeat a key. pgwire and native are positional and still report both
+columns as `id`, so the adapter is unaffected.
 
 ## Adapter compensates transparently
 
 You write idiomatic AR; the adapter swallows the workaround:
 
-- **BUG-014 — advisory locks missing** (upstream closed won't-fix on
-  the pgwire surface, 2026-07-04). The adapter implements the
+- **Advisory locks are unimplemented** (upstream won't-fix on the
+  pgwire surface: the `pg_advisory_*` family raises "function does not
+  exist" and `pg_locks` is absent). The adapter implements the
   migration mutex application-level: an `ar_advisory_locks`
   `document_strict` collection whose TEXT PRIMARY KEY makes
   acquisition an atomic INSERT. Cross-process `db:migrate` safety is
@@ -40,10 +39,6 @@ You write idiomatic AR; the adapter swallows the workaround:
   `advisory_lock_exists?`, and `NODEDB_ADVISORY_LOCK_PREFIX`
   namespacing. Caveat: not session-scoped — a crashed holder's lock
   is stolen after `advisory_lock_ttl` seconds (config, default 3600).
-  Retested on `87053aa7b`: `pg_advisory_lock` / `pg_try_advisory_lock`
-  / `pg_advisory_unlock` are back to failing loudly ("function … does
-  not exist") and `pg_locks` does not exist — advisory locks remain
-  unimplemented, so the collection-based mutex stays.
 - **BUG-064 — `current_database()` missing** — AR's stock
   `SELECT current_database()` raises `PG::UndefinedFunction`, which
   aborts `rails db:migrate` before any migration runs. The adapter

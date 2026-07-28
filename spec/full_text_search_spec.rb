@@ -34,7 +34,7 @@ RSpec.describe NodeDB::FullTextSearch, :integration do
     expect(conn.collections).to include(collection_name)
   end
 
-  it "text_match filters server-side — only the matching row comes back (BUG-010 resolved upstream)" do
+  it "text_match filters server-side — only the matching row comes back" do
     hits = TestPost.fts_search("neural networks", limit: 10)
     expect(hits.map { |h| h["id"] }).to eq(["p1"])
   end

@@ -12,7 +12,7 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
   end
 
   describe "#current_database", :integration do
-    # BUG-064: the server has no current_database() function.
+    # BUG-064 workaround: the server has no current_database() function.
     it "answers from the connection parameters, not the server" do
       expect { conn.query_value("SELECT current_database()", "SCHEMA") }
         .to raise_error(ActiveRecord::StatementInvalid, /current_database/)
@@ -24,7 +24,7 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
   end
 
   describe "#database_version", :integration do
-    it "uses the stock libpq PQserverVersion() path (BUG-043 fixed upstream)" do
+    it "uses the stock libpq PQserverVersion() path" do
       libpq_version = conn.instance_variable_get(:@raw_connection).server_version
 
       expect(libpq_version).to be > 0
@@ -75,13 +75,13 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
       expect(conn.collections).to include(name)
     end
 
-    it "BITEMPORAL DDL projects user columns on plain and history reads (BUG-027 regression)" do
+    it "BITEMPORAL DDL projects user columns on plain and history reads" do
       conn.create_collection(name, engine: :document_strict, bitemporal: true, id: false) do |t|
         t.text :id, primary_key: true
         t.text :title
       end
-      # Autocommit write — AR txn-wrapped writes are lost on bitemporal
-      # collections (BUG-024).
+      # Autocommit write — AR txn-wrapped writes were lost on bitemporal
+      # collections on older builds.
       conn.execute("INSERT INTO #{name} (id, title) VALUES ('a', 'first')")
 
       plain = conn.select_all("SELECT * FROM #{name}").to_a
@@ -96,14 +96,14 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
         .not_to raise_error
     end
 
-    it "drop_collection(if_exists: true) drops an existing collection (BUG-004 fix in NodeDB v0.2.1)" do
+    it "drop_collection(if_exists: true) drops an existing collection" do
       conn.create_collection(name)
       conn.drop_collection(name, if_exists: true)
       expect(conn.collections).not_to include(name)
     end
   end
 
-  describe "BUG-019 pg_catalog vquery bypass", :integration do
+  describe "pg_catalog vquery bypass", :integration do
     let(:name) { "vquery_bypass_#{SecureRandom.hex(4)}" }
 
     before do
@@ -139,10 +139,10 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
     end
   end
 
-  # BUG-025 regression guard: table-qualified WHERE refs silently matched
-  # zero rows; fixed upstream, so AR's qualified SQL must work with no
-  # adapter rewrite.
-  describe "qualified WHERE evaluation (BUG-025 regression guard)", :integration do
+  # Regression guard: table-qualified WHERE refs silently matched zero
+  # rows on older builds; AR's qualified SQL must work with no adapter
+  # rewrite.
+  describe "qualified WHERE evaluation", :integration do
     let(:name) { "dequal_#{SecureRandom.hex(4)}" }
 
     before do
@@ -183,16 +183,16 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
       expect(sums).to eq("alpha" => 7.0, "beta" => 3.0)
     end
 
-    it "grouped counts keep their group keys (BUG-030 regression guard)" do
+    it "grouped counts keep their group keys (regression guard)" do
       expect(DequalModel.group(:label).count).to eq("alpha" => 1, "beta" => 1)
     end
   end
 
-  # BUG-008 regression guard: transactional DELETE was silently dropped
-  # (later: left a PK point-lookup phantom) on collections with an
-  # explicit NOT NULL PRIMARY KEY -- exactly what AR emits. Fixed
-  # upstream; destroy() must keep persisting with no adapter override.
-  describe "record.destroy (BUG-008 regression guard)", :integration do
+  # Regression guard: transactional DELETE was silently dropped (later:
+  # left a PK point-lookup phantom) on collections with an explicit
+  # NOT NULL PRIMARY KEY -- exactly what AR emits. destroy() must keep
+  # persisting with no adapter override.
+  describe "record.destroy", :integration do
     let(:name) { "txn_delete_#{SecureRandom.hex(4)}" }
 
     before do

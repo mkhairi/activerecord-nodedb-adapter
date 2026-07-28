@@ -6,8 +6,8 @@ module ActiveRecord
         #
         # Currently a thin string passthrough — we keep WKT round-tripping
         # ("POINT(lon lat)") and let the caller wrap with ST_GeomFromText
-        # in INSERTs. Replace with rgeo-feature parsing once NodeDB BUG-011
-        # (ST_GeomFromText not evaluated on INSERT) is resolved.
+        # in INSERTs. Replace with rgeo-feature parsing when the caller
+        # side is ready for typed geometry objects.
         class Geometry < ActiveModel::Type::Value
           def initialize(sql_type: nil)
             super()

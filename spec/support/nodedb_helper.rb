@@ -9,7 +9,7 @@ module NodedbHelper
     nil
   end
   # Default database by convention. CREATE DATABASE'd databases were
-  # unusable for most of the alpha (BUG-032, since fixed upstream), and
+  # unusable for most of the alpha, since fixed upstream, and
   # every spec already isolates itself with a random-suffixed collection
   # it drops afterwards, so a dedicated test database buys nothing.
   NODEDB_URL = ENV.fetch("NODEDB_URL", "postgres://nodedb:#{SUPERUSER_PASSWORD}@localhost:6432/nodedb")

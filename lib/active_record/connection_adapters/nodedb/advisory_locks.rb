@@ -11,8 +11,9 @@ module ActiveRecord
         end
       end
 
-      # BUG-014: NodeDB has no advisory-lock primitives (upstream
-      # won't-fix on the pgwire surface), so the mutex is implemented
+      # NodeDB has no advisory-lock primitives (the pg_advisory_* family
+      # raises "function does not exist"; upstream won't-fix on the pgwire
+      # surface), so the mutex is implemented
       # application-level: a document_strict lock collection whose TEXT
       # PRIMARY KEY makes acquisition an atomic INSERT (a second insert
       # of the same key fails the PK uniqueness constraint server-side).

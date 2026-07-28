@@ -10,8 +10,8 @@ module NodeDB
   #   Post.fts_search("nural networks", fuzzy: true)
   #
   # Returns an Array of Hashes with key "id". NodeDB's text_match()
-  # predicate now filters rows server-side (BUG-010 resolved upstream),
-  # so the previous bm25-score null-drop workaround is gone. Look up the
+  # predicate filters rows server-side, so the previous bm25-score
+  # null-drop workaround is gone. Look up the
   # full record via Model.where("id = ?", id).first if you need the body.
   module FullTextSearch
     extend ActiveSupport::Concern
@@ -31,8 +31,7 @@ module NodeDB
         fuzzy_opts = fuzzy ? ", { fuzzy: true, distance: 2 }" : ""
 
         # Bare identifiers — NodeDB rejects qualified column refs.
-        # text_match() filters server-side (BUG-010 resolved upstream),
-        # so just project the id.
+        # text_match() filters server-side, so just project the id.
         sql = "SELECT id " \
               "FROM #{table_name} " \
               "WHERE text_match(#{col}, #{quoted_q}#{fuzzy_opts}) " \

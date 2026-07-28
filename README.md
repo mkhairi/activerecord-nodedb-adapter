@@ -520,8 +520,8 @@ Moved to [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — NodeDB-side
 quirks grouped by user impact (resolved upstream, adapter-compensated,
 requires awareness, open). Per-bug reproductions and workaround history
 live in the [issue tracker](https://github.com/mkhairi/activerecord-nodedb-adapter/issues?q=%22%5Bupstream%3ANodeDB%5D%22)
-(titles prefixed `[upstream:NodeDB] BUG-NNN`). Last retested 2026-07-20
-against upstream `3eaa49873`.
+(titles prefixed `[upstream:NodeDB] BUG-NNN`). Last retested 2026-07-28
+against upstream `87053aa7b`.
 
 ## License
 
