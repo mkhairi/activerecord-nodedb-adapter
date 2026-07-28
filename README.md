@@ -2,7 +2,9 @@
 
 > ## ⚠️ ALPHA — DO NOT USE IN PRODUCTION
 >
-> Version: **`0.1.0.alpha.12`**. Tracks NodeDB **v0.4.0** (upstream `main` at `3eaa49873`, 2026-07-20). Requires `nodedb-ruby >= 0.1.0.alpha.9`.
+> Version: **`0.1.0.alpha.12`**. Requires NodeDB **0.4.0 or newer**
+> (verified against post-0.4.0 upstream `main` at `87053aa7b`) and
+> `nodedb-ruby >= 0.1.0.alpha.9`.
 >
 > This adapter is **experimental and unaudited**. It has **never been used or
 > tested in any production environment**. The migration DSL, model concerns,
@@ -41,10 +43,10 @@ handling and SQL building.
 | Migration DSL     | Working — `create_collection` (with `bitemporal:` flag on v0.3.0+), `create_vector_index`, `drop_collection` |
 | Model concerns    | Vector, Graph (with `graph_stats` on v0.3.0+), Timeseries, Spatial, KV, FTS |
 | Ops surface       | `show_stats` / `show_metrics` / `show_memory` / `show_roles` / `show_tenant` / `show_tenants` / `set_tenant` (v0.3.0+) |
-| Test suite        | 127 examples against live NodeDB; failures limited to known upstream regressions (see *Known issues*) |
+| Test suite        | 130 examples against live NodeDB, green on `87053aa7b` |
 | Rails versions    | 7.1+, 8.x verified |
 | Ruby versions     | 3.2+ (developed on 4.0.1) |
-| NodeDB versions   | 0.1.x through **0.4.0** (latest retest 2026-07-20 against `main` — see *Known issues*) |
+| NodeDB versions   | **0.4.0+** (latest retest 2026-07-28 against `main` at `87053aa7b`) |
 | Sample app        | [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails) (Rails 8.1, full CRUD demo across every NodeDB engine + ops dashboard + personalized PageRank + bitemporal AuditLog) |
 
 ## Installation
@@ -440,20 +442,15 @@ end
 
 - Ruby 3.2+
 - Rails 7.1+ (verified on 8.1.3)
-- NodeDB (pgwire on port 6432) — **latest upstream `main` recommended**
-  (verified against `3eaa49873`, post-v0.4.0, 2026-07-20). Brings a
-  libpq-parseable `server_version` (AR's stock version plumbing works),
-  the `pg_attrdef`/`pg_range` catalog tables and `current_schemas()`,
-  fixed point-lookup caching, and fixes for the earlier
-  scalar-aggregate, filtered-history, and TIMESTAMP-compare
-  regressions. The adapter still bypasses AR's stock pg_catalog
-  introspection (quoted-identifier regclass casts resolve to NULL
-  upstream), and this head carries fresh sharp edges around graph
-  edge counters and same-name collection recreation —
-  see `docs/KNOWN_ISSUES.md`.
-  - On-disk format changed vs pre-June builds — old data dirs make
-    the daemon panic at boot; start with a fresh data directory.
-  - `fts` engine removed upstream (use `create_fts`).
+- **NodeDB 0.4.0 or newer**, pgwire on port 6432 (and 6433 for the
+  native transport). Earlier lines are not supported: 0.4.0 is the
+  first release with a libpq-parseable `server_version`, the
+  `pg_attrdef` / `pg_range` catalog tables and `current_schemas()`,
+  without which AR's stock version plumbing and reflection do not
+  work. Verified against post-0.4.0 upstream `main` at `87053aa7b`.
+  - A pre-0.4 data directory makes the daemon panic at boot — start
+    with a fresh one.
+  - There is no `fts` engine — use `create_fts`.
   - Dev environments need `[auth] max_failed_logins = 0` in a TOML
     config; without it, persistent lockout state trips on routine
     probe sequences and surfaces as
@@ -519,9 +516,8 @@ end
 Moved to [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — NodeDB-side
 quirks grouped by user impact (resolved upstream, adapter-compensated,
 requires awareness, open). Per-bug reproductions and workaround history
-live in the [issue tracker](https://github.com/mkhairi/activerecord-nodedb-adapter/issues?q=%22%5Bupstream%3ANodeDB%5D%22)
-(titles prefixed `[upstream:NodeDB] BUG-NNN`). Last retested 2026-07-28
-against upstream `87053aa7b`.
+live in the [issue tracker](https://github.com/mkhairi/activerecord-nodedb-adapter/issues?q=%22%5Bupstream%3ANodeDB%5D%22).
+Last retested 2026-07-28 against upstream `87053aa7b`.
 
 ## License
 
