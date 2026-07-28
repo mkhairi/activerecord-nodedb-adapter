@@ -80,6 +80,15 @@ You write idiomatic AR; the adapter swallows the workaround:
 
 ## Open, no workaround
 
+- **BUG-065 — a collection with a graph edge rejects every DELETE** —
+  after the first `GRAPH INSERT EDGE`, even a single-key
+  `DELETE ... WHERE id = '<pk>'` fails with "OLLP dependent-read
+  exhausted 5 retries". Graph-backed collections are effectively
+  append-only.
+- **BUG-066 — DELETE against a timeseries collection is a silent
+  no-op** — every predicate, including one on the declared TIME_KEY,
+  reports `DELETE 0` and removes nothing. Timeseries data cannot be
+  pruned or corrected through SQL.
 - **BUG-062 — first timeseries row loses every non-TIME_KEY column** —
   on a timeseries collection created with an explicit column list (what
   `create_collection(engine: :timeseries)` emits), the first inserted
