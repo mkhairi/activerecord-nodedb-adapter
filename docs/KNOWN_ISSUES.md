@@ -16,6 +16,11 @@ timeseries row loses its columns), BUG-063 (TIME_KEY projection/type
 change) and BUG-064 (`current_database()` missing), and BUG-058 is now
 limited to the `IN`-predicate shapes.
 
+The suite was rerun on **2026-07-30** against upstream `146696207`,
+which added BUG-067 (a dropped collection wedges all DDL after the next
+restart). That run exercised the suite, not each older bug's
+reproduction, so the entries below still carry their own retest dates.
+
 One user-visible note: over **HTTP**, a projection whose output columns
 share a name emits `{"id": …, "id_1": …}`, because a JSON object cannot
 repeat a key. pgwire and native are positional and still report both
@@ -80,6 +85,16 @@ You write idiomatic AR; the adapter swallows the workaround:
 
 ## Open, no workaround
 
+- **BUG-067 — a dropped collection wedges all DDL after the next
+  restart** — once a collection has been created and dropped, the
+  daemon replays that metadata entry on its next start, rejects it, and
+  never advances past it. Reads and writes keep working; every
+  subsequent `CREATE`/`DROP COLLECTION` — and so every
+  `rails db:migrate` — times out after 5s. Nothing recovers it in-band,
+  including dropping the offending collection: the data directory has
+  to be discarded and re-migrated. Any suite that cleans up after
+  itself leaves the daemon in this state, so restart a development
+  daemon on a fresh data directory.
 - **BUG-065 — a collection with a graph edge rejects every DELETE** —
   after the first `GRAPH INSERT EDGE`, even a single-key
   `DELETE ... WHERE id = '<pk>'` fails with "OLLP dependent-read
