@@ -40,6 +40,7 @@ module NodeDB
       # The starting node (`from`) is filtered out.
       def graph_traverse(from:, depth: 1, direction: :both)
         sql = NodeDB::SQL::Graph.traverse(
+          in_collection: table_name,
           from: connection.quote(from),
           depth: depth,
           direction: direction
