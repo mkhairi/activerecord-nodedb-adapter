@@ -8,11 +8,15 @@ module NodedbHelper
   rescue
     nil
   end
-  # Default database by convention. CREATE DATABASE'd databases were
-  # unusable for most of the alpha, since fixed upstream, and
-  # every spec already isolates itself with a random-suffixed collection
-  # it drops afterwards, so a dedicated test database buys nothing.
-  NODEDB_URL = ENV.fetch("NODEDB_URL", "postgres://nodedb:#{SUPERUSER_PASSWORD}@localhost:6432/nodedb")
+  # The bootstrapped database is named `default`. pgwire accepts any name
+  # and binds the default anyway, but the native transport resolves the
+  # name against the catalog and rejects an unknown one, so the specs use
+  # the real name for both. Every spec already isolates itself with a
+  # random-suffixed collection it drops afterwards, so a dedicated test
+  # database buys nothing.
+  NODEDB_URL = ENV.fetch("NODEDB_URL", "postgres://nodedb:#{SUPERUSER_PASSWORD}@localhost:6432/default")
+
+  NODEDB_DATABASE = URI.parse(NODEDB_URL).path.delete_prefix("/")
 
   def self.connect!
     uri = URI.parse(NODEDB_URL)
@@ -20,7 +24,7 @@ module NodedbHelper
       adapter: "nodedb",
       host: uri.host,
       port: uri.port || 6432,
-      database: uri.path.delete_prefix("/"),
+      database: NODEDB_DATABASE,
       username: uri.user,
       password: uri.password
     )

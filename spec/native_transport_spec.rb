@@ -24,7 +24,7 @@ RSpec.describe "ActiveRecord over transport: native", :integration do
       transport: "native",
       host: "localhost",
       port: 6433,
-      database: NodedbHelper::NODEDB_URL[%r{/([^/?]+)}, 1] || "nodedb_test",
+      database: NodedbHelper::NODEDB_DATABASE,
       username: "nodedb",
       password: NodedbHelper::SUPERUSER_PASSWORD
     )
