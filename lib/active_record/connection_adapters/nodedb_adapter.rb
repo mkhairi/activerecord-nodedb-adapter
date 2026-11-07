@@ -124,25 +124,40 @@ module ActiveRecord
         super(raw_connection, dequalify_single_table(sql), binds, type_casted_binds, **kwargs)
       end
 
-      SQL_STRING_LITERAL = /'(?:[^']|'')*'/
-      DEQUALIFIABLE_SQL = /\A\s*(?:SELECT|UPDATE|DELETE)\b/i
-      DEQUALIFY_SKIP = /\bJOIN\b|\bFROM\s+"[^"]+"\s*(?:,|\s+AS\b)/i
+      # NodeDB rejects dollar-quoted and E'' strings, so they need no span here.
+      SQL_OPAQUE = /'(?:[^']|'')*'|"(?:[^"]|"")*"|\/\*.*?\*\/|--[^\n]*/m
+      DEQUALIFIABLE_SQL = /\A\s*(?:\/\*.*?\*\/\s*|--[^\n]*\n\s*)*(?:SELECT|UPDATE|DELETE)\b/im
+      DEQUALIFY_SKIP = /\bJOIN\b|\bUSING\b|\bFROM\s+"[^"]+"\s*(?:,|\s+AS\b|\s+"[^"]+")/i
+      SQL_SUBQUERY = /\(\s*SELECT\b(?:[^()]|(?<nested>\((?:[^()]|\g<nested>)*\)))*\)/i
+      SQL_FROM_TABLE = /\bFROM\s+"?([^"\s,()]+)/i
 
-      # ponytail: rewrites by regex, so a subquery on another table keeps its
-      # own qualifier and stays exposed to BUG-069.
+      # ponytail: rewrites by regex. Aliases, joins, CTEs, INSERT ... SELECT and
+      # reads of another table stay untouched and exposed to BUG-069.
       def dequalify_single_table(sql)
         return sql unless sql.is_a?(String) && sql.match?(DEQUALIFIABLE_SQL)
-        return sql if sql.gsub(SQL_STRING_LITERAL, "''").match?(DEQUALIFY_SKIP)
 
-        target = sql[/\b(?:FROM|UPDATE)\s+"([^"]+)"/i, 1]
+        visible = sql.gsub(SQL_OPAQUE) { |m| m.start_with?('"') ? m : " " }
+        return sql if visible.match?(DEQUALIFY_SKIP)
+
+        target = visible[/\b(?:FROM|UPDATE)\s+"([^"]+)"/i, 1]
         return sql unless target
 
         qualifier = "\"#{target}\"."
-        return sql unless sql.include?(qualifier)
+        return sql unless visible.include?(qualifier) && dequalify_safe?(visible, target, qualifier)
 
-        sql.gsub(/#{SQL_STRING_LITERAL}|#{Regexp.escape(qualifier)}/) { |m| m.start_with?("'") ? m : "" }
+        sql.gsub(/#{Regexp.escape(qualifier)}|#{SQL_OPAQUE}/) { |m| (m == qualifier) ? "" : m }
       end
-      private :dequalify_single_table
+
+      # Stripping the outer qualifier silently rebinds a correlated reference
+      # to the inner table, so a subquery on another table must not name it.
+      def dequalify_safe?(visible, target, qualifier)
+        outer = visible.gsub(SQL_SUBQUERY) do |subquery|
+          return false if subquery.include?(qualifier) && subquery.scan(SQL_FROM_TABLE).flatten.uniq != [target]
+          "()"
+        end
+        (outer.scan(SQL_FROM_TABLE).flatten - [target]).empty?
+      end
+      private :dequalify_single_table, :dequalify_safe?
 
       # NodeDB doesn't answer `SHOW max_identifier_length` on any
       # transport — pgwire errors with "unrecognized configuration

@@ -209,9 +209,88 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
     it "leaves statements with a JOIN or an aliased FROM untouched" do
       join = %(SELECT "a"."x" FROM "a" JOIN "b" ON "a"."id" = "b"."a_id")
       aliased = %(SELECT "t"."x" FROM "orders" AS "t" WHERE "t"."x" = 1)
+      bare_alias = %(SELECT "t"."x" FROM "orders" "t" WHERE "t"."x" = 1)
 
       expect(conn.send(:dequalify_single_table, join)).to eq(join)
       expect(conn.send(:dequalify_single_table, aliased)).to eq(aliased)
+      expect(conn.send(:dequalify_single_table, bare_alias)).to eq(bare_alias)
+    end
+
+    context "with a correlated subquery" do
+      let(:other) { "dequal_other_#{SecureRandom.hex(4)}" }
+
+      before do
+        conn.execute(%(CREATE COLLECTION #{other} (id TEXT PRIMARY KEY, ref TEXT) WITH (engine='document_strict')))
+        conn.execute(%(INSERT INTO #{other} (id, ref) VALUES ('o1', 'r1')))
+      end
+
+      after { conn.drop_collection(other, if_exists: true) }
+
+      it "keeps the outer reference bound when the subquery reads another table" do
+        rows = conn.select_values(<<~SQL.squish)
+          SELECT "#{name}"."id" FROM "#{name}"
+          WHERE EXISTS (SELECT 1 FROM "#{other}" WHERE "#{other}"."ref" = "#{name}"."id")
+        SQL
+
+        expect(rows).to eq(["r1"])
+      end
+
+      it "keeps the outer reference bound when the subquery aliases the same table" do
+        DequalModel.create!(id: "r3", label: "r1", score: 1)
+
+        rows = conn.select_values(<<~SQL.squish)
+          SELECT "#{name}"."id" FROM "#{name}"
+          WHERE EXISTS (SELECT 1 FROM "#{name}" "t2" WHERE "t2"."label" = "#{name}"."id")
+        SQL
+
+        expect(rows).to eq(["r1"])
+      end
+
+      it "still dequalifies the outer predicates around an uncorrelated subquery" do
+        ids = conn.select_values(<<~SQL.squish)
+          SELECT "#{name}"."id" FROM "#{name}"
+          WHERE "#{name}"."id" IN (SELECT "#{other}"."ref" FROM "#{other}") AND "#{name}"."label" IN ('alpha')
+        SQL
+
+        expect(ids).to eq(["r1"])
+      end
+
+      it "still dequalifies a subquery that reads the same table" do
+        rows = DequalModel.where(id: DequalModel.where(label: %w[alpha]).select(:id)).where(score: [7])
+
+        expect(rows.pluck(:id)).to eq(["r1"])
+      end
+    end
+
+    it "dequalifies inside the count subquery that limit emits" do
+      expect(DequalModel.where(id: %w[r1 r2]).limit(5).count).to eq(2)
+    end
+
+    it "dequalifies behind a leading comment" do
+      block = conn.select_values(%(/* tag */ SELECT "#{name}"."id" FROM "#{name}" WHERE "#{name}"."id" IN ('r1')))
+      line = conn.select_values(%(-- tag\nSELECT "#{name}"."id" FROM "#{name}" WHERE "#{name}"."id" IN ('r1')))
+
+      expect(block).to eq(["r1"])
+      expect(line).to eq(["r1"])
+    end
+
+    it "keeps a literal behind a comment with an apostrophe" do
+      literal = %("#{name}".label)
+      DequalModel.create!(id: "r3", label: literal, score: 1)
+
+      rows = conn.select_values(<<~SQL.squish)
+        SELECT "#{name}"."label" FROM "#{name}"
+        WHERE "#{name}"."id" IN ('r3') /* don't */ AND "#{name}"."label" = '#{literal}'
+      SQL
+
+      expect(rows).to eq([literal])
+    end
+
+    it "reads the target table outside literals and comments" do
+      sql = %(SELECT "a"."x" FROM "a" WHERE "a"."y" = 'from "zzz"' /* from "yyy" */ AND "a"."id" IN (1))
+
+      expect(conn.send(:dequalify_single_table, sql))
+        .to eq(%(SELECT "x" FROM "a" WHERE "y" = 'from "zzz"' /* from "yyy" */ AND "id" IN (1)))
     end
 
     it "qualified Arel range predicates find rows" do

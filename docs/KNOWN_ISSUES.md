@@ -45,8 +45,16 @@ You write idiomatic AR; the adapter swallows the workaround:
   match zero rows** — AR qualifies every hash condition, so the adapter
   strips a single-table statement's own qualifier before dispatch.
   `where(id: [...])`, `find([...])`, `where(n: 1..5)` and `update_all` work
-  through AR. Hand-written qualified SQL sent past the adapter, and a
-  subquery on another table inside a statement, stay exposed.
+  through AR on Rails 8.0+. These shapes keep their qualifier and stay
+  exposed: `FROM "t" AS "x"`, `FROM "t" "x"`, joins, CTEs, `UNION` with
+  another table, `INSERT ... SELECT`, a subquery on another table, and
+  every predicate of a statement whose subquery on another table refers
+  to the outer table. That last group is left alone because stripping
+  rebinds the reference to the inner table. Hand-written qualified SQL
+  sent past the adapter also stays exposed.
+- **BUG-074 — an aggregate ignores `LIMIT` in a derived table** —
+  `relation.limit(n).count` returns the count without the limit. No
+  workaround. `relation.limit(n).to_a.size` returns the correct count.
 - **BUG-070 — free-standing `BITEMPORAL` and `APPEND_ONLY` are ignored** —
   `create_collection(bitemporal: true)` emits `WITH (bitemporal=true)`,
   which takes effect. Collections created by an earlier adapter version
