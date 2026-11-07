@@ -2,9 +2,9 @@
 
 > ## ⚠️ ALPHA — DO NOT USE IN PRODUCTION
 >
-> Version: **`0.1.0.alpha.12`**. Requires NodeDB **0.4.0 or newer**
-> (verified against post-0.4.0 upstream `main` at `87053aa7b`) and
-> `nodedb-ruby >= 0.1.0.alpha.9`.
+> Version: **`0.1.0.alpha.13`**. Requires NodeDB **0.7.0-dev or newer**
+> (verified against upstream `main` at `4b7784861`) and
+> `nodedb-ruby >= 0.1.0.alpha.11`.
 >
 > This adapter is **experimental and unaudited**. It has **never been used or
 > tested in any production environment**. The migration DSL, model concerns,
@@ -43,10 +43,10 @@ handling and SQL building.
 | Migration DSL     | Working — `create_collection` (with `bitemporal:` flag on v0.3.0+), `create_vector_index`, `drop_collection` |
 | Model concerns    | Vector, Graph (with `graph_stats` on v0.3.0+), Timeseries, Spatial, KV, FTS |
 | Ops surface       | `show_stats` / `show_metrics` / `show_memory` / `show_roles` / `show_tenant` / `show_tenants` / `set_tenant` (v0.3.0+) |
-| Test suite        | 130 examples against live NodeDB, green on `87053aa7b` |
+| Test suite        | 154 examples against live NodeDB, green on `4b7784861` |
 | Rails versions    | 8.0+, verified on 8.1.3 |
 | Ruby versions     | 3.2+ (developed on 4.0.1) |
-| NodeDB versions   | **0.4.0+** (latest retest 2026-11-07 against `main` at `4b7784861`) |
+| NodeDB versions   | **0.7.0-dev+** (latest retest 2026-11-07 against `main` at `4b7784861`) |
 | Sample app        | [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails) (Rails 8.1, full CRUD demo across every NodeDB engine + ops dashboard + personalized PageRank + bitemporal AuditLog) |
 
 ## Installation
@@ -442,12 +442,9 @@ end
 
 - Ruby 3.2+
 - Rails 8.0+ (verified on 8.1.3)
-- **NodeDB 0.4.0 or newer**, pgwire on port 6432 (and 6433 for the
-  native transport). Earlier lines are not supported: 0.4.0 is the
-  first release with a libpq-parseable `server_version`, the
-  `pg_attrdef` / `pg_range` catalog tables and `current_schemas()`,
-  without which AR's stock version plumbing and reflection do not
-  work. Verified against post-0.4.0 upstream `main` at `87053aa7b`.
+- **NodeDB 0.7.0-dev or newer**, pgwire on port 6432 (and 6433 for the
+  native transport). Verified against upstream `main` at `4b7784861`.
+  Earlier builds are untested.
   - A pre-0.4 data directory makes the daemon panic at boot — start
     with a fresh one.
   - There is no `fts` engine — use `create_fts`.
@@ -517,7 +514,7 @@ Moved to [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — NodeDB-side
 quirks grouped by user impact (resolved upstream, adapter-compensated,
 requires awareness, open). Per-bug reproductions and workaround history
 live in the [issue tracker](https://github.com/mkhairi/activerecord-nodedb-adapter/issues?q=%22%5Bupstream%3ANodeDB%5D%22).
-Last retested 2026-07-28 against upstream `87053aa7b`.
+Last retested 2026-11-07 against upstream `4b7784861`.
 
 ## License
 
