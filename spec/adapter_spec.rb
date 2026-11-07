@@ -139,9 +139,8 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
     end
   end
 
-  # Regression guard: table-qualified WHERE refs silently matched zero
-  # rows on older builds; AR's qualified SQL must work with no adapter
-  # rewrite.
+  # NodeDB matches zero rows for a qualified column in IN, NOT IN, BETWEEN
+  # and LIKE, so the adapter strips the statement's own table qualifier.
   describe "qualified WHERE evaluation", :integration do
     let(:name) { "dequal_#{SecureRandom.hex(4)}" }
 
@@ -171,6 +170,48 @@ RSpec.describe ActiveRecord::ConnectionAdapters::NodedbAdapter do
 
     it "conditional count works" do
       expect(DequalModel.where(score: 7).count).to eq(1)
+    end
+
+    it "casts attributes from the DESCRIBE types" do
+      row = DequalModel.find("r1")
+
+      expect(row.score).to eq(7)
+      expect(DequalModel.columns_hash["score"].type).to eq(:integer)
+    end
+
+    it "where with an array finds rows, on the primary key and other columns" do
+      expect(DequalModel.where(id: %w[r1 r2]).pluck(:id)).to contain_exactly("r1", "r2")
+      expect(DequalModel.where(label: %w[alpha]).pluck(:id)).to eq(["r1"])
+      expect(DequalModel.where(score: 7).or(DequalModel.where(score: 3)).count).to eq(2)
+    end
+
+    it "find with several ids returns them" do
+      expect(DequalModel.find(%w[r1 r2]).map(&:id)).to contain_exactly("r1", "r2")
+    end
+
+    it "where.not with an array and a range predicate find rows" do
+      expect(DequalModel.where.not(id: %w[r1]).pluck(:id)).to eq(["r2"])
+      expect(DequalModel.where(score: 1..5).pluck(:id)).to eq(["r2"])
+    end
+
+    it "update_all with an array changes the rows" do
+      expect(DequalModel.where(id: %w[r1]).update_all(label: "gamma")).to eq(1)
+      expect(DequalModel.find("r1").label).to eq("gamma")
+    end
+
+    it "keeps a string literal that contains the qualifier" do
+      literal = %("#{name}".label)
+      DequalModel.create!(id: "r3", label: literal, score: 1)
+
+      expect(DequalModel.where(label: [literal]).pluck(:label)).to eq([literal])
+    end
+
+    it "leaves statements with a JOIN or an aliased FROM untouched" do
+      join = %(SELECT "a"."x" FROM "a" JOIN "b" ON "a"."id" = "b"."a_id")
+      aliased = %(SELECT "t"."x" FROM "orders" AS "t" WHERE "t"."x" = 1)
+
+      expect(conn.send(:dequalify_single_table, join)).to eq(join)
+      expect(conn.send(:dequalify_single_table, aliased)).to eq(aliased)
     end
 
     it "qualified Arel range predicates find rows" do

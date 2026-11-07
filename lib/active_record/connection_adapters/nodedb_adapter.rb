@@ -116,6 +116,34 @@ module ActiveRecord
         @connection_parameters[:dbname].to_s
       end
 
+      # BUG-069 workaround: on a single-table statement NodeDB matches zero
+      # rows for a qualified column in IN, NOT IN, BETWEEN and LIKE, and AR
+      # qualifies every hash condition. Strip the statement's own table
+      # qualifier before dispatch. Remove once upstream fixes the evaluator.
+      def perform_query(raw_connection, sql, binds, type_casted_binds, **kwargs)
+        super(raw_connection, dequalify_single_table(sql), binds, type_casted_binds, **kwargs)
+      end
+
+      SQL_STRING_LITERAL = /'(?:[^']|'')*'/
+      DEQUALIFIABLE_SQL = /\A\s*(?:SELECT|UPDATE|DELETE)\b/i
+      DEQUALIFY_SKIP = /\bJOIN\b|\bFROM\s+"[^"]+"\s*(?:,|\s+AS\b)/i
+
+      # ponytail: rewrites by regex, so a subquery on another table keeps its
+      # own qualifier and stays exposed to BUG-069.
+      def dequalify_single_table(sql)
+        return sql unless sql.is_a?(String) && sql.match?(DEQUALIFIABLE_SQL)
+        return sql if sql.gsub(SQL_STRING_LITERAL, "''").match?(DEQUALIFY_SKIP)
+
+        target = sql[/\b(?:FROM|UPDATE)\s+"([^"]+)"/i, 1]
+        return sql unless target
+
+        qualifier = "\"#{target}\"."
+        return sql unless sql.include?(qualifier)
+
+        sql.gsub(/#{SQL_STRING_LITERAL}|#{Regexp.escape(qualifier)}/) { |m| m.start_with?("'") ? m : "" }
+      end
+      private :dequalify_single_table
+
       # NodeDB doesn't answer `SHOW max_identifier_length` on any
       # transport — pgwire errors with "unrecognized configuration
       # parameter", which crashes AR's grouped calculations
