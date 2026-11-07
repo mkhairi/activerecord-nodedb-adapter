@@ -9,17 +9,9 @@ comments). This list tracks the **latest upstream
 only** — resolved issues are pruned (git history and the CHANGELOG
 keep the record).
 
-Last retested: **2026-07-28** against upstream `main` at `87053aa7b`.
-Everything tracked before this build is fixed and has been pruned
-except the entries below. Three defects landed with it: BUG-062 (first
-timeseries row loses its columns), BUG-063 (TIME_KEY projection/type
-change) and BUG-064 (`current_database()` missing), and BUG-058 is now
-limited to the `IN`-predicate shapes.
-
-The suite was rerun on **2026-07-30** against upstream `146696207`,
-which added BUG-067 (a dropped collection wedges all DDL after the next
-restart). That run exercised the suite, not each older bug's
-reproduction, so the entries below still carry their own retest dates.
+Last retested: **2026-11-07** against upstream `main` at `4b7784861`
+(nodedb 0.7.0-dev). Everything tracked before this build is fixed and
+pruned except the entries below.
 
 One user-visible note: over **HTTP**, a projection whose output columns
 share a name emits `{"id": …, "id_1": …}`, because a JSON object cannot
@@ -49,11 +41,31 @@ You write idiomatic AR; the adapter swallows the workaround:
   aborts `rails db:migrate` before any migration runs. The adapter
   answers `current_database` from the connection's own dbname instead
   of asking the server. Remove once upstream implements the function.
-- **Edge-store keys track the IN-clause spelling verbatim** — a
-  double-quoted identifier in `GRAPH INSERT EDGE IN "name"` stores a
-  literal-quoted key that scoped `SHOW GRAPH STATS` lookups miss. The
-  Graph concern passes bare collection names for edge inserts and
-  algo calls.
+- **BUG-069 — qualified columns in `IN`, `NOT IN`, `BETWEEN`, `LIKE`
+  match zero rows** — AR qualifies every hash condition, so the adapter
+  strips a single-table statement's own qualifier before dispatch.
+  `where(id: [...])`, `find([...])`, `where(n: 1..5)` and `update_all` work
+  through AR on Rails 8.0+. These shapes keep their qualifier and stay
+  exposed: `FROM "t" AS "x"`, `FROM "t" "x"`, joins, CTEs, `UNION` with
+  another table, `INSERT ... SELECT`, a subquery on another table, and
+  every predicate of a statement whose subquery on another table refers
+  to the outer table. That last group is left alone because stripping
+  rebinds the reference to the inner table. Hand-written qualified SQL
+  sent past the adapter also stays exposed.
+- **BUG-074 — an aggregate ignores `LIMIT` in a derived table** —
+  `relation.limit(n).count` returns the count without the limit. No
+  workaround. `relation.limit(n).to_a.size` returns the correct count.
+- **BUG-070 — free-standing `BITEMPORAL` and `APPEND_ONLY` are ignored** —
+  `create_collection(bitemporal: true)` emits `WITH (bitemporal=true)`,
+  which takes effect. Collections created by an earlier adapter version
+  are not bitemporal and keep 300 seconds of history. Recreate them.
+- **BUG-072 — `UPDATE` fails on a `(key, value)` KV collection** — `kv_set`
+  writes through `INSERT ... ON CONFLICT`.
+- **BUG-073 — three text renderings of a vector** — the `Vector` type
+  casts all three.
+- **Delete tombstones in bitemporal history** — NodeDB records a delete as
+  a version that repeats the old values. `versions` and `history` hide it.
+  Pass `include_tombstones: true` to see it.
 - **`schema_migrations` / `ar_internal_metadata`** — NodeDB-aware
   subclasses use `CREATE COLLECTION` + raw unqualified SQL (the
   metadata collection is keyed on NodeDB's mandatory `id` column);
@@ -62,54 +74,33 @@ You write idiomatic AR; the adapter swallows the workaround:
 - **GRAPH TRAVERSE / INSERT EDGE quirks** — JSON-array row parsed and
   `IN 'collection'` threaded automatically by the `Graph` concern;
   harmless libpq stderr noise filtered by `Graph.silence_libpq_noise`.
-- **BUG-063 — timeseries TIME_KEY column** — upstream no longer renames
-  the `TIME_KEY` column to `timestamp` on read, and a column declared
-  `TIMESTAMP TIME_KEY` returns epoch-ms integers under OID 1114.
-  `create_collection(engine: :timeseries)` therefore declares
-  `timestamp BIGINT TIME_KEY`, which keeps `NodeDB::Timeseries#since` /
-  `#until_time` / `#time_bucket` working and keeps driver typecasting
-  honest. Collections declaring a differently-named TIME_KEY need their
-  own WHERE clauses.
 
 ## Requires user awareness
 
-- **BUG-058 — `SEARCH` composes as a derived table but not in an
-  `IN` predicate** — `FROM (SEARCH ...) s` works on `87053aa7b`
-  (outer `WHERE` / `ORDER BY` / `LIMIT` included). `IN (SEARCH ...)`
-  errors ("subquery projection must be a column reference"), and the
-  `IN (SELECT id FROM (SEARCH ...) s)` spelling silently returns zero
-  rows — do not use it. A hybrid query that needs an `IN` predicate is
-  still two round trips. The `Vector` concern returns
-  id + surrogate + distance; `id` is the document id, so a follow-up
-  `find` gets you the record.
+- **Timeseries columns must be declared** —
+  `create_collection(engine: :timeseries)` declares only `timestamp` and
+  `value`, and NodeDB rejects any other column with `42703`. Use
+  `create_timeseries` with a block to declare the fields you write. The
+  helpers assume the `TIME_KEY` column is named `timestamp`.
+- **`DELETE` on a timeseries collection raises an error** — expire rows with
+  `CREATE RETENTION POLICY`, or clear them with `TRUNCATE`.
+- **Native transport decode gaps** — a timestamp arrives as
+  `[<microseconds>]` and a geometry as its SRID (`4326`), with no
+  coordinates. pgwire returns a `Time` and GeoJSON. Native decoding is on
+  hold until an official client ships.
 
 ## Open, no workaround
 
-- **BUG-067 — a dropped collection wedges all DDL after the next
-  restart** — once a collection has been created and dropped, the
-  daemon replays that metadata entry on its next start, rejects it, and
-  never advances past it. Reads and writes keep working; every
-  subsequent `CREATE`/`DROP COLLECTION` — and so every
-  `rails db:migrate` — times out after 5s. Nothing recovers it in-band,
-  including dropping the offending collection: the data directory has
-  to be discarded and re-migrated. Any suite that cleans up after
-  itself leaves the daemon in this state, so restart a development
-  daemon on a fresh data directory.
-- **BUG-065 — a collection with a graph edge rejects every DELETE** —
-  after the first `GRAPH INSERT EDGE`, even a single-key
-  `DELETE ... WHERE id = '<pk>'` fails with "OLLP dependent-read
-  exhausted 5 retries". Graph-backed collections are effectively
-  append-only.
-- **BUG-066 — DELETE against a timeseries collection is a silent
-  no-op** — every predicate, including one on the declared TIME_KEY,
-  reports `DELETE 0` and removes nothing. Timeseries data cannot be
-  pruned or corrected through SQL.
-- **BUG-062 — first timeseries row loses every non-TIME_KEY column** —
-  on a timeseries collection created with an explicit column list (what
-  `create_collection(engine: :timeseries)` emits), the first inserted
-  row keeps only its TIME_KEY value; all other fields come back NULL.
-  Later inserts are stored correctly and nothing reports the loss.
+- **BUG-071 — a column named `version`, `user`, `current_date` or
+  `current_schema` resolves to the function** — `SELECT version` returns the
+  server version string, `WHERE version = 7` matches nothing, and
+  `SET version = version + 1` silently writes NULL. The others raise
+  "function does not exist" on read. Rename the column. `SELECT *` returns
+  the stored value. `schema_migrations` stays keyed on `id` for this reason.
+- **BUG-072, AR updates and TTL** — `record.update(value: ...)` on a model
+  over a `(key, value)` KV collection fails with "key holds a bare value",
+  and so does the `ttl:` option of `kv_set`.
 - **BUG-057 — `ROLLBACK AND CHAIN` unsupported** ("unsupported: statement
-  type: ROLLBACK AND CHAIN") — surfaces when AR retries a failed
-  nested transaction. A translation shim (`ROLLBACK; BEGIN`) is a
-  possible future adapter addition. Retested on `87053aa7b`.
+  type: ROLLBACK AND CHAIN") — surfaces when AR retries a failed nested
+  transaction. A translation shim (`ROLLBACK; BEGIN`) is a possible future
+  adapter addition. Retested on `4b7784861`.

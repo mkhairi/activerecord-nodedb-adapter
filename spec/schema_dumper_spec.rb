@@ -25,7 +25,7 @@ RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
       conn.execute("GRANT tenant_admin TO t_spec_tenant")
     end
 
-    tenant_conn = PG.connect(host: "localhost", port: 6432, dbname: "nodedb",
+    tenant_conn = PG.connect(host: "localhost", port: 6432, dbname: "default",
       user: "t_spec_tenant", password: "spec-tenant-pw-1")
     names = tenant_conn.exec("SHOW COLLECTIONS").to_a.map { |r| r["name"] }
     unless names.include?("spec_tenant_scratch")
@@ -101,6 +101,19 @@ RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
   ensure
     conn.drop_collection(explicit, if_exists: true)
     conn.drop_collection(synthetic, if_exists: true)
+  end
+
+  it "omits the synthetic document column and engine of a schemaless collection" do
+    bare = "bare_dump_#{SecureRandom.hex(4)}"
+    conn.execute("CREATE COLLECTION #{bare}")
+    expect(conn.select_rows("DESCRIBE #{bare}").flatten).to include("document") # precondition
+
+    stream = StringIO.new
+    conn.create_schema_dumper({}).dump(stream)
+
+    expect(stream.string[/^.*"#{bare}".*$/].strip).to eq(%(create_collection "#{bare}"))
+  ensure
+    conn.drop_collection(bare, if_exists: true)
   end
 
   it "dumps without raising and omits collections it cannot DESCRIBE" do

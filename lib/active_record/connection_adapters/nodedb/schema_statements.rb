@@ -99,8 +99,8 @@ module ActiveRecord
           )
         end
 
-        # NodeDB has no DROP FULLTEXT INDEX; the generic DROP INDEX removes
-        # it. Dropping the parent collection removes its indexes too.
+        # The generic DROP INDEX removes a fulltext index. Dropping the parent
+        # collection removes its indexes too.
         def drop_fulltext_index(index_name)
           execute_nodedb(NodeDB::SQL::FTS.drop_index(index_name.to_s))
         rescue ActiveRecord::StatementInvalid => e

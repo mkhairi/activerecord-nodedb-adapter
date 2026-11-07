@@ -14,9 +14,8 @@ module NodeDB
     extend ActiveSupport::Concern
 
     class_methods do
-      # NodeDB rejects qualified column refs (`"kv_sessions"."key"`), so the
-      # KV helpers build raw `WHERE key = …` predicates rather than using
-      # AR's hash-form `where(key: key)` which auto-qualifies.
+      # The KV helpers build raw `WHERE key = …` predicates and return plain
+      # values rather than model instances.
       def kv_get(key)
         rows = connection.select_all(
           "SELECT key, value FROM #{table_name} WHERE key = #{connection.quote(key)} LIMIT 1"
@@ -25,17 +24,12 @@ module NodeDB
       end
 
       def kv_set(key, value, ttl: nil)
-        if kv_exists?(key)
-          connection.execute(
-            "UPDATE #{table_name} SET value = #{connection.quote(value)} " \
-            "WHERE key = #{connection.quote(key)}"
-          )
-        else
-          connection.execute(
-            "INSERT INTO #{table_name} (key, value) " \
-            "VALUES (#{connection.quote(key)}, #{connection.quote(value)})"
-          )
-        end
+        # NodeDB rejects a plain UPDATE on a (key, value) collection (BUG-072).
+        connection.execute(
+          "INSERT INTO #{table_name} (key, value) " \
+          "VALUES (#{connection.quote(key)}, #{connection.quote(value)}) " \
+          "ON CONFLICT (key) DO UPDATE SET value = #{connection.quote(value)}"
+        )
         if ttl
           sql = NodeDB::SQL::KV.set_ttl(
             table: table_name,

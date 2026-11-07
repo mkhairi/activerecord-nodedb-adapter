@@ -59,6 +59,18 @@ RSpec.describe NodeDB::Bitemporal, :integration do
     expect(BtOrder.history("o2").map { |r| r["status"] }).to eq(["placed"])
   end
 
+  it "exposes the delete tombstone on request" do
+    BtOrder.find("o2").destroy
+
+    expect(BtOrder.history("o2", include_tombstones: true).size).to eq(2)
+    expect(BtOrder.versions.count { |r| r["id"] == "o2" }).to eq(1)
+    expect(BtOrder.versions(include_tombstones: true).count { |r| r["id"] == "o2" }).to eq(2)
+  end
+
+  it "keeps history beyond the short-lived snapshot window" do
+    expect { conn.execute("SELECT 1 FROM #{BtOrder.table_name} FOR SYSTEM_TIME AS OF 1 LIMIT 1") }.not_to raise_error
+  end
+
   describe ".as_of" do
     it "returns the rows current at a past system time" do
       cutoff = BtOrder.history("o1").first["_ts_system"].to_i

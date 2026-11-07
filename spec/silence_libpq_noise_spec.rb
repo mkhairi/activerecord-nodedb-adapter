@@ -2,6 +2,15 @@ require "spec_helper"
 require "timeout"
 
 RSpec.describe "NodeDB::Graph.silence_libpq_noise" do
+  it "matches every non-standard command tag and nothing else" do
+    re = NodeDB::Graph::LIBPQ_NOISE_RE
+
+    ["INSERT EDGE 1", "DELETE EDGE 1", "GRAPH TRAVERSE"].each do |tag|
+      expect("could not interpret result from server: #{tag}").to match(re)
+    end
+    expect("some other libpq warning").not_to match(re)
+  end
+
   it "returns the block's value" do
     expect(NodeDB::Graph.silence_libpq_noise { :ok }).to eq(:ok)
   end

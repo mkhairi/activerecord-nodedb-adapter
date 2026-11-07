@@ -5,20 +5,18 @@ module ActiveRecord
     module Nodedb
       # Database tasks for `bin/rails db:*` (create, drop, schema dump, ...).
       #
-      # NodeDB doesn't ship a separate CREATE DATABASE / DROP DATABASE
-      # surface — the `nodedb` database is the singleton owned by the
-      # daemon. Most lifecycle tasks become no-ops; structure dump/load go
-      # through `db/schema.rb` via our SchemaDumper (#26).
+      # The adapter does not manage databases: `db:create` and `db:drop` are
+      # no-ops, and the configured name must already exist, or the connection
+      # fails. The daemon bootstraps a database named `default`. Structure
+      # dump/load go through `db/schema.rb` via our SchemaDumper (#26).
       #
       # PG's task class handles `db:migrate`, `db:rollback`,
       # `db:migrate:status`, `db:seed`, charset, etc. correctly already.
-      # We subclass to no-op the database-creation pieces that NodeDB
-      # rejects, and keep the rest.
+      # We subclass to no-op the database-creation pieces and keep the rest.
       class DatabaseTasks < ActiveRecord::Tasks::PostgreSQLDatabaseTasks
         def create(*)
-          # NodeDB has no CREATE DATABASE; the singleton `nodedb` database
-          # is provisioned by the daemon. Silently succeed so `db:create`
-          # in CI / boot scripts does not abort.
+          # Succeed without creating anything, so `db:create` in CI and boot
+          # scripts does not abort.
           $stdout.puts "[nodedb] db:create — singleton database; skipping CREATE."
         end
 

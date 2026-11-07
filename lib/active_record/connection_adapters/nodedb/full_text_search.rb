@@ -28,9 +28,9 @@ module NodeDB
       def fts_search(query, column: _fts_columns.keys.first, limit: 20, fuzzy: false)
         col = column.to_s
         quoted_q = connection.quote(query)
-        fuzzy_opts = fuzzy ? ", { fuzzy: true, distance: 2 }" : ""
+        fuzzy_opts = fuzzy ? ", fuzzy => true" : ""
 
-        # Bare identifiers — NodeDB rejects qualified column refs.
+        # Bare identifiers.
         # text_match() filters server-side, so just project the id.
         sql = "SELECT id " \
               "FROM #{table_name} " \

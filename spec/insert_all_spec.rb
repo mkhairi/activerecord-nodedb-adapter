@@ -45,8 +45,8 @@ RSpec.describe "insert_all / upsert_all", :integration do
     expect(model.find_by(id: "a").label).to eq("x2")
   end
 
-  it "returns no rows (NodeDB has no RETURNING payload)" do
+  it "returns the primary key through RETURNING" do
     result = model.insert_all!([{id: "a", label: "x"}])
-    expect(result.rows).to eq([])
+    expect(result.rows).to eq([["a"]])
   end
 end

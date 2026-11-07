@@ -31,9 +31,8 @@ module ActiveRecord
         # lock itself, so a dumped block always collides on db:schema:load.
         INTERNAL_TABLES = %w[schema_migrations ar_internal_metadata ar_advisory_locks].freeze
 
-        # Dev/test/spec runs share the single default nodedb database
-        # (CREATE DATABASE is unusable upstream), so collections leaked by
-        # an interrupted suite run would get baked into schema.rb. Ignore
+        # Dev/test/spec runs share the default database, so collections
+        # leaked by an interrupted suite run would get baked into schema.rb. Ignore
         # this stack's spec/smoke prefixes by default; apps add their own
         # via ActiveRecord::SchemaDumper.ignore_tables (strings or
         # regexps, honored below like the stock dumper).
@@ -98,8 +97,9 @@ module ActiveRecord
         end
 
         def detect_engine(rows)
-          storage = rows.find { |r| r["field"] == "__storage" }
-          storage&.fetch("type")
+          storage = rows.find { |r| r["field"] == "__storage" }&.fetch("type")
+          # Schemaless is the default, so a reload needs no engine clause.
+          storage unless storage == "document_schemaless"
         end
 
         def extract_user_columns(rows)
@@ -108,16 +108,19 @@ module ActiveRecord
           #    types it plain TEXT; a reloaded collection must NOT redeclare it,
           #    and the synthetic id rejects inserts anyway)
           #  - any `__*` markers (__storage, __collection_type, __kv_key)
+          #  - the synthetic `document JSON` row of a schemaless collection
           #
           # Keep the explicit `id ... PRIMARY KEY` row (typed "TEXT PRIMARY
           # KEY" by DESCRIBE): dropping it dumps a collection whose reload
           # gets only the synthetic id, and every INSERT naming `id` then
           # fails with "unknown field 'id' not present in strict schema".
           seen_internal_id = false
+          schemaless = rows.any? { |r| r["field"] == "__storage" && r["type"] == "document_schemaless" }
           rows.filter_map do |row|
             field = row["field"].to_s
             type = row["type"].to_s
             next if field.start_with?("__")
+            next if schemaless && field == "document" && type == "JSON"
             if field == "id" && !seen_internal_id && row["nullable"] == "false" &&
                 !type.include?("PRIMARY KEY")
               seen_internal_id = true

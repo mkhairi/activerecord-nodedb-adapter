@@ -34,6 +34,11 @@ RSpec.describe NodeDB::FullTextSearch, :integration do
     expect(conn.collections).to include(collection_name)
   end
 
+  it "fuzzy search finds a misspelled term" do
+    hits = TestPost.fts_search("nural networks", limit: 10, fuzzy: true)
+    expect(hits.map { |h| h["id"] }).to eq(["p1"])
+  end
+
   it "text_match filters server-side — only the matching row comes back" do
     hits = TestPost.fts_search("neural networks", limit: 10)
     expect(hits.map { |h| h["id"] }).to eq(["p1"])
