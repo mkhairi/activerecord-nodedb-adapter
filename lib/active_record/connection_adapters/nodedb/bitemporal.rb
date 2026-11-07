@@ -14,9 +14,11 @@ module NodeDB
   #
   # Rows come back as Array<Hash> (same convention as NodeDB::KV): the
   # temporal FROM-clause suffix doesn't compose with AR relations, and
-  # history rows carry the extra `_ts_system` column. NodeDB does not
-  # support ORDER BY / computed columns on AS OF scans yet, so history
-  # ordering happens client-side on `_ts_system`.
+  # history rows carry the extra `_ts_system` column.
+  #
+  # NodeDB records a delete as a tombstone version that repeats the old
+  # values with `_ts_valid_until` at the minimum i64. `versions` and
+  # `history` hide tombstones. Pass `include_tombstones: true` to see them.
   module Bitemporal
     extend ActiveSupport::Concern
 
@@ -32,19 +34,31 @@ module NodeDB
       # Every committed version of every row (audit-log semantics,
       # `AS OF SYSTEM TIME NULL`). Each row includes `_ts_system`, the
       # commit timestamp in ms. Sorted oldest-first client-side.
-      def versions
-        connection.select_all(
-          "SELECT * FROM #{table_name} AS OF SYSTEM TIME NULL"
-        ).to_a.sort_by { |row| row["_ts_system"].to_i }
+      def versions(include_tombstones: false)
+        NodeDB::Bitemporal.version_rows(
+          connection.select_all("SELECT * FROM #{table_name} AS OF SYSTEM TIME NULL"),
+          include_tombstones: include_tombstones
+        )
       end
 
       # Version trail for a single record by primary key.
-      def history(pk_value)
-        connection.select_all(
-          "SELECT * FROM #{table_name} AS OF SYSTEM TIME NULL " \
-          "WHERE #{primary_key} = #{connection.quote(pk_value)}"
-        ).to_a.sort_by { |row| row["_ts_system"].to_i }
+      def history(pk_value, include_tombstones: false)
+        NodeDB::Bitemporal.version_rows(
+          connection.select_all(
+            "SELECT * FROM #{table_name} AS OF SYSTEM TIME NULL " \
+            "WHERE #{primary_key} = #{connection.quote(pk_value)}"
+          ),
+          include_tombstones: include_tombstones
+        )
       end
+    end
+
+    TOMBSTONE_VALID_UNTIL = -(2**63)
+
+    def self.version_rows(rows, include_tombstones:)
+      rows = rows.to_a
+      rows = rows.reject { |row| row["_ts_valid_until"].to_i == TOMBSTONE_VALID_UNTIL } unless include_tombstones
+      rows.sort_by { |row| row["_ts_system"].to_i }
     end
 
     # Time-ish → millisecond epoch literal for AS OF SYSTEM TIME.
