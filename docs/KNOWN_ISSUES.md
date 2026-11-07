@@ -76,9 +76,10 @@ You write idiomatic AR; the adapter swallows the workaround:
   helpers assume the `TIME_KEY` column is named `timestamp`.
 - **`DELETE` on a timeseries collection raises an error** — expire rows with
   `CREATE RETENTION POLICY`, or clear them with `TRUNCATE`.
-- **Native transport returns a timestamp as `[<microseconds>]`** — the
-  attribute stays that raw array. pgwire returns a `Time`. Native decoding
-  is on hold until an official client ships.
+- **Native transport decode gaps** — a timestamp arrives as
+  `[<microseconds>]` and a geometry as its SRID (`4326`), with no
+  coordinates. pgwire returns a `Time` and GeoJSON. Native decoding is on
+  hold until an official client ships.
 
 ## Open, no workaround
 
