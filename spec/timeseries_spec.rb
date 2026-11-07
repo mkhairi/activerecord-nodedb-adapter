@@ -5,7 +5,11 @@ RSpec.describe NodeDB::Timeseries, :integration do
   let(:collection_name) { "test_metrics_#{SecureRandom.hex(4)}" }
 
   before(:each) do
-    conn.create_collection(collection_name, engine: :timeseries)
+    conn.create_timeseries(collection_name) do |t|
+      t.column :timestamp, "TIMESTAMP TIME_KEY"
+      t.column :host, :text
+      t.column :cpu, :float
+    end
 
     tname = collection_name
     model_class = Class.new(ActiveRecord::Base) do
@@ -15,8 +19,8 @@ RSpec.describe NodeDB::Timeseries, :integration do
     end
     stub_const("TestMetric", model_class)
 
-    # NodeDB timeseries: insert via the declared TIME_KEY column name, which
-    # defaults to `timestamp`, carrying epoch-ms integers (what the
+    # NodeDB rejects undeclared columns on a declared timeseries, and takes
+    # epoch-ms integers for a TIMESTAMP TIME_KEY (what the
     # NodeDB::SQL::Timeseries clauses compare against).
     conn.execute("INSERT INTO #{collection_name} (timestamp, host, cpu) VALUES (#{Time.parse("2026-05-09 10:00:00 UTC").to_i * 1000}, 'web-01', 0.45)")
     conn.execute("INSERT INTO #{collection_name} (timestamp, host, cpu) VALUES (#{Time.parse("2026-05-09 10:05:00 UTC").to_i * 1000}, 'web-01', 0.55)")
@@ -28,6 +32,10 @@ RSpec.describe NodeDB::Timeseries, :integration do
   it "filters with since" do
     results = TestMetric.since(Time.parse("2026-05-09 09:30:00 UTC")).to_a
     expect(results.length).to eq(2)
+  end
+
+  it "returns the TIME_KEY as a Time" do
+    expect(TestMetric.since(Time.parse("2026-05-09 09:30:00 UTC")).first.timestamp).to be_a(Time)
   end
 
   it "time_bucket produces valid SQL fragment" do

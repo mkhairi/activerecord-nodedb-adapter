@@ -25,7 +25,7 @@ RSpec.describe "SchemaDumper vs tenant-homed collections", :integration do
       conn.execute("GRANT tenant_admin TO t_spec_tenant")
     end
 
-    tenant_conn = PG.connect(host: "localhost", port: 6432, dbname: "nodedb",
+    tenant_conn = PG.connect(host: "localhost", port: 6432, dbname: "default",
       user: "t_spec_tenant", password: "spec-tenant-pw-1")
     names = tenant_conn.exec("SHOW COLLECTIONS").to_a.map { |r| r["name"] }
     unless names.include?("spec_tenant_scratch")

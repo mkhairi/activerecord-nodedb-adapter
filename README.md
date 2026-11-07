@@ -46,7 +46,7 @@ handling and SQL building.
 | Test suite        | 130 examples against live NodeDB, green on `87053aa7b` |
 | Rails versions    | 7.1+, 8.x verified |
 | Ruby versions     | 3.2+ (developed on 4.0.1) |
-| NodeDB versions   | **0.4.0+** (latest retest 2026-07-28 against `main` at `87053aa7b`) |
+| NodeDB versions   | **0.4.0+** (latest retest 2026-11-07 against `main` at `4b7784861`) |
 | Sample app        | [mkhairi/nodedb-on-rails](https://github.com/mkhairi/nodedb-on-rails) (Rails 8.1, full CRUD demo across every NodeDB engine + ops dashboard + personalized PageRank + bitemporal AuditLog) |
 
 ## Installation
