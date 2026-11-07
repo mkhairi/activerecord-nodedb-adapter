@@ -1,5 +1,15 @@
 require "spec_helper"
 
+RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::Type::Vector do
+  it "casts all three text renderings NodeDB returns" do
+    type = described_class.new
+
+    ["[0.5,1.5]", '["0.5","1.5"]', "{0.5,1.5}"].each do |text|
+      expect(type.cast(text)).to eq([0.5, 1.5])
+    end
+  end
+end
+
 RSpec.describe NodeDB::Vector, :integration do
   let(:conn) { ActiveRecord::Base.connection }
   let(:collection_name) { "test_articles_#{SecureRandom.hex(4)}" }
