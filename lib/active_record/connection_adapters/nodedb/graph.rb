@@ -14,9 +14,9 @@ module NodeDB
 
     # libpq prints "could not interpret result from server: <TAG>" to fd 2
     # whenever NodeDB returns a non-standard command tag (INSERT EDGE,
-    # GRAPH TRAVERSE, etc.). The query itself succeeds. Filter these specific
+    # DELETE EDGE, GRAPH TRAVERSE, etc.). The query itself succeeds. Filter these specific
     # lines without dropping any real warnings.
-    LIBPQ_NOISE_RE = /\Acould not interpret result from server: (INSERT EDGE|GRAPH [A-Z ]+)/
+    LIBPQ_NOISE_RE = /\Acould not interpret result from server: (INSERT EDGE|DELETE EDGE|GRAPH [A-Z ]+)/
 
     class_methods do
       # The IN clause takes the bare collection name: NodeDB stores a
