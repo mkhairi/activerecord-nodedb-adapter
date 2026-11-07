@@ -8,6 +8,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-`1.0` alpha line: APIs may change between alpha releases without
 deprecation. Bump `N` in `0.1.0.alpha.N` for any user-visible change.
 
+## [0.1.0.alpha.13] — 2026-11-07
+
+Tracks NodeDB upstream 0.7.0-dev at `4b7784861`. Requires
+`nodedb-ruby >= 0.1.0.alpha.11` and `activerecord >= 8.0`.
+
+### Changed
+
+- The minimum `activerecord` is 8.0. The qualified-predicate rewrite
+  overrides `perform_query`, which first exists in 8.0.
+- Attributes cast from the fixed PostgreSQL OIDs, so over pgwire an
+  integer reads as an integer and a boolean as a boolean, not as strings.
+- `versions` and `history` hide delete tombstones. Pass
+  `include_tombstones: true` to see them.
+- `create_collection(bitemporal: true)` emits `WITH (bitemporal=true)`. A
+  collection created by an earlier version is not bitemporal and must be
+  recreated.
+
+### Fixed
+
+- Qualified `IN`, `NOT IN`, `BETWEEN` and `LIKE` return rows through AR.
+  The adapter strips a single-table statement's own qualifier. It leaves
+  literals, comments, aliased statements and correlated subqueries alone.
+  `docs/KNOWN_ISSUES.md` lists the shapes that stay exposed.
+- `kv_set` overwrites an existing key through `INSERT ... ON CONFLICT`.
+- `VECTOR` attributes cast from the `{0.1,0.2}` rendering.
+- Fuzzy full-text search passes the named `fuzzy` option.
+- `current_database` answers from the connection parameters, because
+  upstream has no such function.
+- `GRAPH TRAVERSE` passes its collection, and libpq noise for
+  `DELETE EDGE` is filtered. The stderr pipe drains concurrently. (#135,
+  #192)
+- `CREATE VECTOR INDEX` emits its column clause. (#167)
+- `create_table_and_set_flags` uses the id-keyed internal metadata. (#156)
+- Native `ROLLBACK TO SAVEPOINT` no longer clears transaction state, and
+  the native transport refuses to connect when `sslmode` demands TLS.
+  (#133, #134)
+- The schema dumper keeps an explicit `id` primary key, round-trips
+  through `db:schema:load`, and omits the synthetic schemaless `document`
+  column. (#152, #153)
+
+### Removed
+
+- Workarounds for upstream defects fixed since the last release. (#148,
+  #157)
+
+### Tooling
+
+- CI tests Ruby 4.0 and clones `nodedb-ruby` from its release tag. (#139)
+
 ## [0.1.0.alpha.12] — 2026-07-08
 
 Tracks NodeDB upstream `main` at `8e84501a`. Requires
