@@ -145,6 +145,16 @@ module ActiveRecord
         Nodedb::SchemaDumper.new(self, options)
       end
 
+      # PostgreSQL's fixed OIDs for the base types NodeDB returns. AR normally
+      # learns these from pg_type in load_additional_types, which is a no-op
+      # here, so without them every attribute casts as a plain String.
+      BASE_TYPE_OIDS = {
+        16 => "bool", 17 => "bytea", 20 => "int8", 21 => "int2", 23 => "int4",
+        25 => "text", 114 => "json", 700 => "float4", 701 => "float8",
+        1043 => "varchar", 1082 => "date", 1083 => "time", 1114 => "timestamp",
+        1184 => "timestamptz", 1700 => "numeric", 2950 => "uuid", 3802 => "jsonb"
+      }.freeze
+
       # Register NodeDB-specific Ruby type casters at connection bootstrap.
       # Pattern lifted from activerecord-postgis-adapter / clickhouse-activerecord:
       # extend the AR type registry so #cast / #serialize / #deserialize behave
@@ -158,6 +168,7 @@ module ActiveRecord
         m.register_type("geometry") { |sql_type| Nodedb::Type::Geometry.new(sql_type: sql_type) }
         m.register_type("json") { Nodedb::Type::Json.new }
         m.register_type("jsonb") { Nodedb::Type::Json.new }
+        BASE_TYPE_OIDS.each { |oid, name| m.alias_type(oid, name) }
       end
 
       # Quote NodeDB-friendly literals for engine-specific Ruby values.
@@ -392,8 +403,8 @@ module ActiveRecord
       # NodeDB's virtual pg_type carries only base scalar types — the
       # extra round-trips (three per connection) register nothing the
       # static section of initialize_type_map doesn't already cover.
-      # Skip on every transport; model attribute casting is driven by
-      # the overridden #column_definitions (DESCRIBE).
+      # Skip on every transport; #initialize_type_map aliases the fixed OIDs
+      # and #column_definitions reports them from DESCRIBE.
       def load_additional_types(oids = nil)
         # no-op
       end
