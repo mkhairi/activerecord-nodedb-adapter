@@ -29,7 +29,11 @@ Gem::Specification.new do |spec|
 
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "activerecord", ">= 8.0"
+  # < 8.2.a: the adapter overrides the private perform_query, whose
+  # signature changes in 8.2. ".a" also excludes 8.2 prereleases and Rails
+  # main (8.2.0.alpha). "< 8.2" admits them.
+  # spec/rails_compat_spec.rb guards it.
+  spec.add_dependency "activerecord", ">= 8.0", "< 8.2.a"
   spec.add_dependency "nodedb-ruby", ">= 0.1.0.alpha.11"
   spec.add_dependency "ostruct", "~> 0.6"
 

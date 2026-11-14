@@ -441,7 +441,7 @@ end
 ## Requirements
 
 - Ruby 3.2+
-- Rails 8.0+ (verified on 8.1.3)
+- Rails 8.0 or 8.1 (verified on 8.1.3). 8.2 is not supported yet.
 - **NodeDB 0.7.0-dev or newer**, pgwire on port 6432 (and 6433 for the
   native transport). Verified against upstream `main` at `4b7784861`.
   Earlier builds are untested.
