@@ -198,6 +198,12 @@ module ActiveRecord
         1184 => "timestamptz", 1700 => "numeric", 2950 => "uuid", 3802 => "jsonb"
       }.freeze
 
+      # NodeDB types with no PostgreSQL OID. column_definitions tags VECTOR
+      # and GEOMETRY columns with these keys so reflection reaches the NodeDB
+      # casters. Negative, so no OID the server sends can collide.
+      VECTOR_OID = -1001
+      GEOMETRY_OID = -1002
+
       # Register NodeDB-specific Ruby type casters at connection bootstrap.
       # Pattern lifted from activerecord-postgis-adapter / clickhouse-activerecord:
       # extend the AR type registry so #cast / #serialize / #deserialize behave
@@ -207,8 +213,8 @@ module ActiveRecord
       # idiomatic Ruby on read and serialise Ruby into NodeDB literals on write.
       def initialize_type_map(m = type_map)
         super
-        m.register_type("vector") { |sql_type| Nodedb::Type::Vector.new(sql_type: sql_type) }
-        m.register_type("geometry") { |sql_type| Nodedb::Type::Geometry.new(sql_type: sql_type) }
+        m.register_type(VECTOR_OID) { |_oid, _fmod, sql_type| Nodedb::Type::Vector.new(sql_type: sql_type) }
+        m.register_type(GEOMETRY_OID) { |_oid, _fmod, sql_type| Nodedb::Type::Geometry.new(sql_type: sql_type) }
         m.register_type("json") { Nodedb::Type::Json.new }
         m.register_type("jsonb") { Nodedb::Type::Json.new }
         BASE_TYPE_OIDS.each { |oid, name| m.alias_type(oid, name) }
@@ -474,7 +480,18 @@ module ActiveRecord
         # Schema.normalize dedupes DESCRIBE's duplicate primary-key rows
         # (previously two `id` columns reached AR) and filters internals.
         NodeDB::Schema.normalize(rows).map do |col|
-          [col.name, col.pg_type, nil, !col.nullable, col.oid, -1, nil, nil, "", ""]
+          sql_type, oid = nodedb_column_type(col)
+          [col.name, sql_type, nil, !col.nullable, oid, -1, nil, nil, "", ""]
+        end
+      end
+
+      # VECTOR(n) and GEOMETRY have no PostgreSQL OID. Keep the raw type, so
+      # Vector reads its dim from it, and route them to the NodeDB casters.
+      def nodedb_column_type(col)
+        case col.type
+        when /\AVECTOR\b/i then [col.type, VECTOR_OID]
+        when /\AGEOMETRY\b/i then [col.type, GEOMETRY_OID]
+        else [col.pg_type, col.oid]
         end
       end
 
@@ -487,3 +504,6 @@ module ActiveRecord
     end
   end
 end
+
+ActiveRecord::Type.register(:vector, ActiveRecord::ConnectionAdapters::Nodedb::Type::Vector, adapter: :nodedb)
+ActiveRecord::Type.register(:geometry, ActiveRecord::ConnectionAdapters::Nodedb::Type::Geometry, adapter: :nodedb)

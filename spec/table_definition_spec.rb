@@ -48,11 +48,10 @@ RSpec.describe ActiveRecord::ConnectionAdapters::Nodedb::TableDefinition do
 
       model.create!(id: "t1", title: "hello", embedding: [0.1, 0.2, 0.3])
 
-      # DESCRIBE reports every column as text on current upstream, so prove
-      # the VECTOR column exists by round-tripping a value through it.
-      # Values come back as f32, so compare within tolerance.
-      raw = model.find_by(title: "hello").embedding
-      values = raw.is_a?(String) ? JSON.parse(raw) : raw
+      # Reflection maps VECTOR(3) to the Vector caster. Values come back as
+      # f32, so compare within tolerance.
+      values = model.find_by(title: "hello").embedding
+      expect(values).to be_an(Array)
       expect(values.length).to eq(3)
       [0.1, 0.2, 0.3].each_with_index do |v, i|
         expect(values[i]).to be_within(0.0001).of(v)
