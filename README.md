@@ -366,9 +366,10 @@ with a `before_create { self.id ||= SecureRandom.uuid }`.
 
 ## Type casters
 
-Engine-specific Ruby <-> NodeDB-literal casting is registered automatically
-on connection bootstrap. Declare attributes on your model and AR rounds
-them through the right Ruby type:
+Columns declared `VECTOR(n)`, `GEOMETRY` or `JSON` cast automatically from
+the schema: a vector reads as `Array<Float>`, and in-place edits to a JSON
+value are saved. Declare an attribute only for a column NodeDB does not
+declare, such as a field of a schemaless collection:
 
 ```ruby
 class Article < ApplicationRecord
